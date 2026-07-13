@@ -51,6 +51,8 @@ nicht in Git, server-spezifische Werte bleiben also bei jedem Pull unangetastet.
 - Eigenes Passwort ändern (`/account`, für alle eingeloggten Nutzer)
 - Kontaktdaten (E-Mail, Telefon) pro Nutzer, selbstständig unter `/account` pflegbar,
   in der Nutzerverwaltung für Admins sichtbar
+- Bearbeiter-Zuweisung: Admins können pro Kunde einen zuständigen Admin ("Bearbeiter")
+  festlegen (Nutzerverwaltung, Dropdown) - Grundlage für den späteren Mailversand
 - Bulk-Zuweisung nach Ordner: `/admin/users/<id>/permissions` gruppiert Videos nach
   Ordner (z.B. Datumsordner der DJI-Clips) mit einer "alle in diesem Ordner"-Checkbox
 - Dunkles UI ohne Frameworks (reines CSS)

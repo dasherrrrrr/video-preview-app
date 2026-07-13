@@ -22,7 +22,18 @@ router = APIRouter(prefix="/admin")
 def _fetch_users():
     with get_db() as conn:
         return conn.execute(
-            "SELECT id, username, is_admin, email, phone, created_at FROM users ORDER BY id"
+            "SELECT u.id, u.username, u.is_admin, u.email, u.phone, u.created_at, "
+            "u.assigned_editor_id, e.username AS editor_username "
+            "FROM users u LEFT JOIN users e ON e.id = u.assigned_editor_id "
+            "ORDER BY u.id"
+        ).fetchall()
+
+
+def _fetch_editors():
+    """Admins, die als Bearbeiter einem Kunden zugewiesen werden können."""
+    with get_db() as conn:
+        return conn.execute(
+            "SELECT id, username FROM users WHERE is_admin = 1 ORDER BY username"
         ).fetchall()
 
 
@@ -30,7 +41,13 @@ def _fetch_users():
 def list_users(request: Request, admin=Depends(require_admin)):
     return templates.TemplateResponse(
         "admin_users.html",
-        {"request": request, "user": admin, "users": _fetch_users(), "error": None},
+        {
+            "request": request,
+            "user": admin,
+            "users": _fetch_users(),
+            "editors": _fetch_editors(),
+            "error": None,
+        },
     )
 
 
@@ -53,6 +70,7 @@ def create_user(
                     "request": request,
                     "user": admin,
                     "users": _fetch_users(),
+                    "editors": _fetch_editors(),
                     "error": f"Benutzername '{username}' existiert bereits.",
                 },
                 status_code=400,
@@ -145,6 +163,26 @@ def _fetch_user_or_404(user_id: int):
     if not target:
         raise HTTPException(status_code=404, detail="Nutzer nicht gefunden.")
     return target
+
+
+@router.post("/users/{user_id}/editor")
+def assign_editor(user_id: int, editor_id: str = Form(""), admin=Depends(require_admin)):
+    _fetch_user_or_404(user_id)
+    editor_id_int = None
+    if editor_id:
+        editor_id_int = int(editor_id)
+        with get_db() as conn:
+            editor = conn.execute(
+                "SELECT id FROM users WHERE id = ? AND is_admin = 1", (editor_id_int,)
+            ).fetchone()
+        if not editor:
+            raise HTTPException(status_code=400, detail="Ungültiger Bearbeiter.")
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE users SET assigned_editor_id = ? WHERE id = ?",
+            (editor_id_int, user_id),
+        )
+    return RedirectResponse(url="/admin/users", status_code=303)
 
 
 def _video_folder(filepath: str) -> str:

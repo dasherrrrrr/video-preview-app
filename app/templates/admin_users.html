@@ -5,7 +5,7 @@
 
 <table class="user-table">
     <thead>
-        <tr><th>Benutzername</th><th>Rolle</th><th>E-Mail</th><th>Telefon</th><th>Angelegt</th><th></th></tr>
+        <tr><th>Benutzername</th><th>Rolle</th><th>E-Mail</th><th>Telefon</th><th>Bearbeiter</th><th>Angelegt</th><th></th></tr>
     </thead>
     <tbody>
         {% for u in users %}
@@ -14,6 +14,20 @@
             <td>{% if u["is_admin"] %}Admin{% else %}Nutzer{% endif %}</td>
             <td class="mono">{{ u["email"] or "-" }}</td>
             <td class="mono">{{ u["phone"] or "-" }}</td>
+            <td>
+                {% if u["is_admin"] %}
+                -
+                {% else %}
+                <form class="editor-form" method="post" action="/admin/users/{{ u['id'] }}/editor">
+                    <select name="editor_id" onchange="this.form.requestSubmit()">
+                        <option value="">Kein Bearbeiter</option>
+                        {% for e in editors %}
+                        <option value="{{ e['id'] }}" {% if u["assigned_editor_id"] == e["id"] %}selected{% endif %}>{{ e["username"] }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+                {% endif %}
+            </td>
             <td class="mono">{{ u["created_at"] }}</td>
             <td><a href="/admin/users/{{ u['id'] }}/permissions">Videos zuweisen</a></td>
         </tr>

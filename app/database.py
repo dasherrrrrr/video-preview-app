@@ -86,7 +86,17 @@ def init_db() -> None:
             );
             """
         )
-        _migrate_add_columns(conn, "users", {"email": "TEXT", "phone": "TEXT"})
+        _migrate_add_columns(
+            conn,
+            "users",
+            {
+                "email": "TEXT",
+                "phone": "TEXT",
+                # Welcher Admin ist für diesen Kunden zuständig - Grundlage für
+                # den späteren Mailversand bei Kommentaren.
+                "assigned_editor_id": "INTEGER REFERENCES users(id) ON DELETE SET NULL",
+            },
+        )
 
 
 def _migrate_add_columns(conn: sqlite3.Connection, table: str, columns: dict) -> None:

@@ -49,6 +49,7 @@ def ensure_transcoded(video_id: int, source_path: Path) -> Path:
         "-hwaccel_output_format", "vaapi",
         "-i", str(source_path),
         "-c:v", "h264_vaapi",
+        "-qp", "24",  # konstante Qualität statt unbegrenzter Bitrate (sonst oft größer als Quelle)
         "-c:a", "aac",
         "-movflags", "+faststart",
         str(tmp_path),

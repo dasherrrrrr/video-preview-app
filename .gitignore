@@ -3,4 +3,4 @@ __pycache__/
 data/app.db
 .venv/
 .claude/settings.local.json
-docker-compose.override.yml
+.env

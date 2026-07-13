@@ -3,17 +3,17 @@ services:
     build: .
     container_name: video-preview
     ports:
-      - "8000:8000"
+      - "${HOST_PORT:-8000}:8000"
     volumes:
       # Datenbank - MUSS gemountet sein, sonst sind User/Marker beim Update weg
       - ./data:/app/data
       # Deine Videodateien, read-only eingebunden (die App muss dort nichts schreiben)
-      - /mnt/user/videos:/videos:ro
+      - "${VIDEOS_HOST_PATH:-/mnt/user/videos}:/videos:ro"
     environment:
       # Fester Secret-Key, damit Logins nicht bei jedem Container-Neustart
-      # ungültig werden. Vor dem ersten Start durch einen eigenen Zufallswert
-      # ersetzen, z.B. mit: openssl rand -hex 32
-      - SESSION_SECRET=bitte-hier-einen-zufaelligen-wert-eintragen
+      # ungültig werden. Wird aus .env gelesen (siehe .env.example) - ohne
+      # gesetzten Wert fällt main.py auf einen Zufalls-Key pro Neustart zurück.
+      - SESSION_SECRET=${SESSION_SECRET:-}
       - VIDEOS_DIR=/videos
       - PYTHONUNBUFFERED=1
     restart: unless-stopped

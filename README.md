@@ -13,6 +13,18 @@ es wird danach nirgends gespeichert (nur der Hash landet in der Datenbank).
 
 Danach im Browser: http://localhost:8000
 
+## Deployment per Docker (Server-Update via git pull)
+
+```bash
+git clone https://github.com/dasherrrrrr/video-preview-app.git
+cd video-preview-app
+cp .env.example .env   # HOST_PORT, VIDEOS_HOST_PATH, SESSION_SECRET anpassen
+docker compose up -d --build
+```
+
+Updates danach einfach mit `./update.sh` (macht `git pull` + Rebuild). `.env` liegt
+nicht in Git, server-spezifische Werte bleiben also bei jedem Pull unangetastet.
+
 ## Was schon funktioniert
 
 - Login/Logout mit Session-Cookies

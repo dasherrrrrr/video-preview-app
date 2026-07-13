@@ -44,11 +44,20 @@ body {
     font-weight: 600;
     font-size: 1.05rem;
     letter-spacing: 0.01em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .brand-mark {
     color: var(--accent);
     margin-right: 6px;
+}
+
+.brand-logo {
+    height: 24px;
+    width: auto;
+    display: block;
 }
 
 .topnav {
@@ -419,6 +428,35 @@ button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
     padding: 6px 10px;
     font-size: 0.82rem;
     white-space: nowrap;
+}
+
+/* Branding (Logo/Favicon in den Einstellungen) */
+.branding-row {
+    display: flex;
+    gap: 32px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.branding-row > div {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.branding-preview {
+    max-height: 48px;
+    max-width: 160px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px;
+}
+
+.branding-preview-small {
+    max-height: 32px;
+    max-width: 32px;
 }
 
 /* Kommentare */

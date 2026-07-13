@@ -12,6 +12,51 @@
 <p class="alert">Test-Mail fehlgeschlagen: {{ test_result[6:] }}</p>
 {% endif %}
 
+<h2>Darstellung</h2>
+
+<form class="card-form" method="post" action="/admin/settings">
+    <label>
+        Name der App (Titelzeile, Kopfbereich)
+        <input type="text" name="site_title" value="{{ settings['site_title'] }}" placeholder="Video Preview">
+    </label>
+    <input type="hidden" name="smtp_host" value="{{ settings['smtp_host'] }}">
+    <input type="hidden" name="smtp_port" value="{{ settings['smtp_port'] or '587' }}">
+    <input type="hidden" name="smtp_username" value="{{ settings['smtp_username'] }}">
+    <input type="hidden" name="smtp_from" value="{{ settings['smtp_from'] }}">
+    <input type="hidden" name="smtp_use_ssl" value="{{ 'on' if settings['smtp_use_ssl'] == 'true' else '' }}">
+    <input type="hidden" name="app_base_url" value="{{ settings['app_base_url'] }}">
+    <button type="submit">Namen speichern</button>
+</form>
+
+<div class="branding-row">
+    <div>
+        <p class="muted">Logo (im Kopfbereich, statt des ▶-Symbols)</p>
+        {% if settings["logo_set"] %}
+        <img src="/branding/logo" alt="" class="branding-preview">
+        <form method="post" action="/admin/settings/branding/logo/delete">
+            <button type="submit" class="marker-delete">Logo entfernen</button>
+        </form>
+        {% endif %}
+        <form class="thumb-upload-form" method="post" action="/admin/settings/branding/logo" enctype="multipart/form-data">
+            <input type="file" name="branding_file" accept="image/png,image/jpeg,image/svg+xml" required>
+            <button type="submit">Logo hochladen</button>
+        </form>
+    </div>
+    <div>
+        <p class="muted">Favicon (Browser-Tab-Symbol)</p>
+        {% if settings["favicon_set"] %}
+        <img src="/branding/favicon" alt="" class="branding-preview branding-preview-small">
+        <form method="post" action="/admin/settings/branding/favicon/delete">
+            <button type="submit" class="marker-delete">Favicon entfernen</button>
+        </form>
+        {% endif %}
+        <form class="thumb-upload-form" method="post" action="/admin/settings/branding/favicon" enctype="multipart/form-data">
+            <input type="file" name="branding_file" accept="image/png,image/x-icon,image/svg+xml" required>
+            <button type="submit">Favicon hochladen</button>
+        </form>
+    </div>
+</div>
+
 <h2>SMTP (Mailversand)</h2>
 <p class="muted">
     Wird verwendet, um den zugewiesenen Bearbeiter zu benachrichtigen, wenn ein
@@ -52,6 +97,7 @@
         Öffentliche URL der App (für Links in Mails)
         <input type="text" name="app_base_url" value="{{ settings['app_base_url'] }}" placeholder="http://192.168.178.250:8001">
     </label>
+    <input type="hidden" name="site_title" value="{{ settings['site_title'] }}">
     <button type="submit">Einstellungen speichern</button>
 </form>
 

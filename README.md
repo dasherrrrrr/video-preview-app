@@ -62,6 +62,10 @@ nicht in Git, server-spezifische Werte bleiben also bei jedem Pull unangetastet.
   GMX, eigener Server, ...) und die öffentliche App-URL bequem im Web-UI pflegen,
   inkl. "Test-Mail senden". Werte landen in der `settings`-Tabelle, `.env` dient
   nur noch als Fallback/Erstkonfiguration, bis jemand die Oberfläche nutzt
+- Branding: App-Name, Logo und Favicon lassen sich unter `/admin/settings`
+  hochladen (PNG/JPG/SVG bzw. PNG/ICO/SVG fürs Favicon), landen in `data/branding/`
+  und werden über `/branding/logo` bzw. `/branding/favicon` ausgeliefert - auch
+  auf der Login-Seite sichtbar
 - Dunkles UI ohne Frameworks (reines CSS)
 
 ## Projektstruktur
@@ -76,6 +80,8 @@ app/
   transcode.py                - VAAPI-Transcoding + Cache
   mailer.py                     - SMTP-Mailversand
   settings.py                    - Key-Value-Einstellungen (DB, mit .env-Fallback)
+  branding.py                     - Logo/Favicon-Uploads
+  templates_env.py                  - gemeinsame Jinja2Templates-Instanz für alle Router
   routers/
     auth_routes.py             - /login, /logout
     dashboard.py                 - / (Übersicht), /watch/<id> (Player)
@@ -83,7 +89,8 @@ app/
     streaming.py                   - /stream/<id>
     markers.py                      - Marker anlegen/löschen
     settings.py                      - /admin/settings
+    branding.py                       - /branding/<logo|favicon>
   templates/                        - Jinja2-HTML-Templates
   static/css/style.css               - Styling
-data/                                 - app.db + transcoded/-Cache (automatisch angelegt)
+data/                                 - app.db, transcoded/, thumbnails/, branding/ (automatisch angelegt)
 ```

@@ -1,13 +1,9 @@
-from pathlib import Path
-
 from fastapi import APIRouter, Depends, Request
-from fastapi.templating import Jinja2Templates
 
 from ..auth import require_login
 from ..database import get_db
 from ..media import get_authorized_video
-
-templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
+from ..templates_env import templates
 
 router = APIRouter()
 

@@ -3,13 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Video Preview{% endblock %}</title>
+    <title>{% block title %}{{ get_setting("site_title") or "Video Preview" }}{% endblock %}</title>
+    {% if get_setting("favicon_content_type") %}
+    <link rel="icon" href="/branding/favicon">
+    {% endif %}
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <header class="topbar">
         <a href="/" class="brand">
-            <span class="brand-mark">▶</span> Video Preview
+            {% if get_setting("logo_content_type") %}
+            <img src="/branding/logo" alt="" class="brand-logo">
+            {% else %}
+            <span class="brand-mark">▶</span>
+            {% endif %}
+            {{ get_setting("site_title") or "Video Preview" }}
         </a>
         {% if user %}
         <nav class="topnav">

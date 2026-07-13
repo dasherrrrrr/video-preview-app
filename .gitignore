@@ -3,6 +3,7 @@ __pycache__/
 data/app.db
 data/transcoded/
 data/thumbnails/
+data/branding/
 .venv/
 .claude/settings.local.json
 .env

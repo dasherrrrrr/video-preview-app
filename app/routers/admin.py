@@ -4,17 +4,15 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
 
 from ..auth import hash_password, require_admin
 from ..catalog import scan_library
 from ..database import get_db
+from ..templates_env import templates
 from ..thumbnails import set_custom_thumbnail
 
 ALLOWED_THUMBNAIL_TYPES = {"image/png", "image/jpeg"}
 MAX_THUMBNAIL_SIZE = 15 * 1024 * 1024  # 15 MB
-
-templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
 router = APIRouter(prefix="/admin")
 

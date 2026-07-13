@@ -84,6 +84,14 @@ def init_db() -> None:
                 body TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
+
+            -- Freie Key-Value-Einstellungen, im Admin-Bereich unter /admin/settings
+            -- pflegbar (z.B. SMTP-Zugangsdaten) - Alternative zu Umgebungsvariablen,
+            -- damit Admins das nicht auf dem Server in der .env editieren müssen.
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            );
             """
         )
         _migrate_add_columns(

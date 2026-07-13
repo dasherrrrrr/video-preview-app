@@ -56,9 +56,12 @@ nicht in Git, server-spezifische Werte bleiben also bei jedem Pull unangetastet.
 - Bulk-Zuweisung nach Ordner: `/admin/users/<id>/permissions` gruppiert Videos nach
   Ordner (z.B. Datumsordner der DJI-Clips) mit einer "alle in diesem Ordner"-Checkbox
 - Mailversand: schreibt ein Kunde (kein Admin) einen Kommentar, bekommt sein
-  zugewiesener Bearbeiter automatisch eine Mail (`app/mailer.py`, frei konfigurierbarer
-  SMTP-Server über `.env` - Gmail, web.de, GMX, eigener Server, ...). Ohne gesetztes
-  `SMTP_HOST` bleibt der Versand einfach aus, kein Fehler
+  zugewiesener Bearbeiter automatisch eine Mail. Ohne konfiguriertes SMTP bleibt
+  der Versand einfach aus, kein Fehler
+- Admin-Einstellungsseite (`/admin/settings`): SMTP-Zugangsdaten (Gmail, web.de,
+  GMX, eigener Server, ...) und die öffentliche App-URL bequem im Web-UI pflegen,
+  inkl. "Test-Mail senden". Werte landen in der `settings`-Tabelle, `.env` dient
+  nur noch als Fallback/Erstkonfiguration, bis jemand die Oberfläche nutzt
 - Dunkles UI ohne Frameworks (reines CSS)
 
 ## Projektstruktur
@@ -71,12 +74,15 @@ app/
   catalog.py               - Katalog-Scan (ffprobe)
   media.py                  - Gemeinsame Berechtigungsprüfung (Player/Streaming)
   transcode.py                - VAAPI-Transcoding + Cache
+  mailer.py                     - SMTP-Mailversand
+  settings.py                    - Key-Value-Einstellungen (DB, mit .env-Fallback)
   routers/
     auth_routes.py             - /login, /logout
     dashboard.py                 - / (Übersicht), /watch/<id> (Player)
     admin.py                      - /admin/users, /admin/videos, Zuweisung
     streaming.py                   - /stream/<id>
     markers.py                      - Marker anlegen/löschen
+    settings.py                      - /admin/settings
   templates/                        - Jinja2-HTML-Templates
   static/css/style.css               - Styling
 data/                                 - app.db + transcoded/-Cache (automatisch angelegt)

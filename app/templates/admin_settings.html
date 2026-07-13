@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Einstellungen{% endblock %}
+{% block content %}
+<h1>Einstellungen</h1>
+
+{% if saved %}
+<p class="alert alert-success">Einstellungen gespeichert.</p>
+{% endif %}
+{% if test_result == "ok" %}
+<p class="alert alert-success">Test-Mail erfolgreich verschickt.</p>
+{% elif test_result and test_result.startswith("error:") %}
+<p class="alert">Test-Mail fehlgeschlagen: {{ test_result[6:] }}</p>
+{% endif %}
+
+<h2>SMTP (Mailversand)</h2>
+<p class="muted">
+    Wird verwendet, um den zugewiesenen Bearbeiter zu benachrichtigen, wenn ein
+    Kunde einen Kommentar schreibt. Funktioniert mit jedem SMTP-Anbieter, z.B.
+    Gmail (smtp.gmail.com, Port 587, App-Passwort nötig), web.de (smtp.web.de,
+    Port 587) oder GMX (mail.gmx.net, Port 587). Leer lassen, um Mailversand
+    zu deaktivieren.
+    {% if smtp_configured %}<strong>Aktuell konfiguriert.</strong>{% else %}<strong>Aktuell nicht konfiguriert.</strong>{% endif %}
+</p>
+
+<form class="card-form" method="post" action="/admin/settings">
+    <label>
+        SMTP-Server (Host)
+        <input type="text" name="smtp_host" value="{{ settings['smtp_host'] }}" placeholder="smtp.gmail.com">
+    </label>
+    <label>
+        Port
+        <input type="text" name="smtp_port" value="{{ settings['smtp_port'] or '587' }}">
+    </label>
+    <label>
+        Benutzername
+        <input type="text" name="smtp_username" value="{{ settings['smtp_username'] }}">
+    </label>
+    <label>
+        Passwort
+        <input type="password" name="smtp_password"
+            placeholder="{% if settings['smtp_password_set'] %}•••••• (leer lassen, um es zu behalten){% else %}noch nicht gesetzt{% endif %}">
+    </label>
+    <label>
+        Absenderadresse
+        <input type="text" name="smtp_from" value="{{ settings['smtp_from'] }}" placeholder="leer = Benutzername">
+    </label>
+    <label class="checkbox-label">
+        <input type="checkbox" name="smtp_use_ssl" {% if settings['smtp_use_ssl'] == 'true' %}checked{% endif %}>
+        Direktes SSL statt STARTTLS (meist Port 465, selten nötig)
+    </label>
+    <label>
+        Öffentliche URL der App (für Links in Mails)
+        <input type="text" name="app_base_url" value="{{ settings['app_base_url'] }}" placeholder="http://192.168.178.250:8001">
+    </label>
+    <button type="submit">Einstellungen speichern</button>
+</form>
+
+<h2>Test-Mail senden</h2>
+<form class="card-form" method="post" action="/admin/settings/test-mail">
+    <label>
+        Empfängeradresse
+        <input type="email" name="test_email" required>
+    </label>
+    <button type="submit">Test-Mail senden</button>
+</form>
+{% endblock %}

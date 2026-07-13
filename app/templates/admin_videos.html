@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Video-Katalog{% endblock %}
+{% block content %}
+<h1>Video-Katalog</h1>
+
+{% if scan_result %}
+<p class="alert alert-success">Scan abgeschlossen: {{ scan_result }}</p>
+{% endif %}
+
+<form method="post" action="/admin/videos/scan">
+    <button type="submit">Verzeichnis neu einlesen</button>
+</form>
+
+<table class="user-table">
+    <thead>
+        <tr><th>Titel</th><th>Pfad</th><th>Dauer</th><th>Codec</th><th>Hinzugefügt</th></tr>
+    </thead>
+    <tbody>
+        {% for v in videos %}
+        <tr>
+            <td>{{ v["title"] }}</td>
+            <td class="mono">{{ v["filepath"] }}</td>
+            <td>
+                {% if v["duration_seconds"] %}
+                {{ (v["duration_seconds"] // 60) | int }}:{{ "%02d" | format(v["duration_seconds"] % 60) }}
+                {% else %}
+                -
+                {% endif %}
+            </td>
+            <td>{{ v["codec"] or "-" }}</td>
+            <td class="mono">{{ v["added_at"] }}</td>
+        </tr>
+        {% endfor %}
+        {% if not videos %}
+        <tr><td colspan="5">Noch keine Videos im Katalog. Verzeichnis einlesen, um loszulegen.</td></tr>
+        {% endif %}
+    </tbody>
+</table>
+{% endblock %}

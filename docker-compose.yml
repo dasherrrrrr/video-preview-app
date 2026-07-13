@@ -14,6 +14,8 @@ services:
       # ungültig werden. Vor dem ersten Start durch einen eigenen Zufallswert
       # ersetzen, z.B. mit: openssl rand -hex 32
       - SESSION_SECRET=bitte-hier-einen-zufaelligen-wert-eintragen
+      - VIDEOS_DIR=/videos
+      - PYTHONUNBUFFERED=1
     restart: unless-stopped
 
     # Wird erst ab Teil 2 gebraucht (VAAPI-Transcoding über die Arc A380).

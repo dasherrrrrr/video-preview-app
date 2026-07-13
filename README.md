@@ -23,9 +23,14 @@ Danach im Browser: http://localhost:8000
   permissions, markers) - videos/permissions/markers werden erst in Teil 2 befüllt
 - Dunkles UI ohne Frameworks (reines CSS)
 
-## Was als Nächstes kommt (Teil 2)
+## Teil 2 (in Arbeit)
 
-- Verzeichnis mit den Videodateien einlesen (Katalog-Scan + `ffprobe` für Metadaten)
+- ✅ Verzeichnis mit den Videodateien einlesen (Katalog-Scan + `ffprobe` für Metadaten,
+  Admin-Bereich unter `/admin/videos`). Pfad wird über die Umgebungsvariable
+  `VIDEOS_DIR` gesteuert (Default `/videos`, im Docker-Compose entsprechend gemountet).
+
+## Was als Nächstes kommt
+
 - Videos den Nutzern über die Admin-Oberfläche zuweisen (permissions-Tabelle befüllen)
 - Video-Player im Dashboard mit Streaming-Endpoint (Direct Play + VAAPI-Transcode
   für H.265, siehe die Docker/VAAPI-Tests, die wir schon gemacht haben)

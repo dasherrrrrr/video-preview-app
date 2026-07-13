@@ -1,10 +1,12 @@
 from pathlib import Path
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from ..auth import hash_password, require_admin
+from ..catalog import scan_library
 from ..database import get_db
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
@@ -55,3 +57,31 @@ def create_user(
             (username, hash_password(password), 1 if is_admin == "on" else 0),
         )
     return RedirectResponse(url="/admin/users", status_code=303)
+
+
+def _fetch_videos():
+    with get_db() as conn:
+        return conn.execute(
+            "SELECT id, filepath, title, duration_seconds, codec, added_at "
+            "FROM videos ORDER BY filepath"
+        ).fetchall()
+
+
+@router.get("/videos")
+def list_videos(request: Request, admin=Depends(require_admin), scan_result: Optional[str] = None):
+    return templates.TemplateResponse(
+        "admin_videos.html",
+        {
+            "request": request,
+            "user": admin,
+            "videos": _fetch_videos(),
+            "scan_result": scan_result,
+        },
+    )
+
+
+@router.post("/videos/scan")
+def scan_videos(admin=Depends(require_admin)):
+    result = scan_library()
+    summary = f"{result['added']} neu, {result['removed']} entfernt, {result['unchanged']} unverändert"
+    return RedirectResponse(url=f"/admin/videos?scan_result={summary}", status_code=303)

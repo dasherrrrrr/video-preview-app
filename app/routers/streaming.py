@@ -1,17 +1,27 @@
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from ..auth import require_login
 from ..catalog import VIDEOS_DIR
 from ..media import get_authorized_video
+from ..thumbnails import get_thumbnail_path
 from ..transcode import ensure_transcoded, needs_transcode
 
 router = APIRouter()
 
 CHUNK_SIZE = 1024 * 1024  # 1 MB pro gelesenem Block
 RANGE_RE = re.compile(r"bytes=(\d+)-(\d*)")
+
+
+@router.get("/thumbnail/{video_id}")
+def thumbnail(video_id: int, user=Depends(require_login)):
+    get_authorized_video(video_id, user)
+    path = get_thumbnail_path(video_id)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Kein Vorschaubild vorhanden.")
+    return FileResponse(path, media_type="image/jpeg")
 
 
 @router.get("/stream/{video_id}")

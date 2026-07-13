@@ -5,7 +5,18 @@
 {% if videos %}
 <div class="video-grid">
     {% for video in videos %}
-    <a class="video-card" href="/watch/{{ video['id'] }}">{{ video["title"] }}</a>
+    <a class="video-card" href="/watch/{{ video['id'] }}">
+        <div class="video-thumb">
+            <img src="/thumbnail/{{ video['id'] }}" alt="" loading="lazy"
+                onerror="this.style.display='none'">
+            {% if video["duration_seconds"] %}
+            <span class="video-duration">{{ (video["duration_seconds"] // 60) | int }}:{{ "%02d" | format(video["duration_seconds"] % 60) }}</span>
+            {% endif %}
+        </div>
+        <div class="video-meta">
+            <p class="video-title">{{ video["title"] }}</p>
+        </div>
+    </a>
     {% endfor %}
 </div>
 {% else %}

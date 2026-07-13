@@ -10,6 +10,8 @@ import subprocess
 from pathlib import Path
 
 from .database import get_db
+from .thumbnails import generate_thumbnail, get_thumbnail_path
+from .transcode import get_cache_path as get_transcode_cache_path
 
 VIDEOS_DIR = Path(os.environ.get("VIDEOS_DIR", "/videos"))
 
@@ -71,28 +73,33 @@ def scan_library() -> dict:
 
             with get_db() as conn:
                 existing = conn.execute(
-                    "SELECT id FROM videos WHERE filepath = ?", (rel_path,)
+                    "SELECT id, duration_seconds FROM videos WHERE filepath = ?", (rel_path,)
                 ).fetchone()
                 if existing:
                     skipped_existing += 1
+                    # Nachziehen für Videos, die vor Einführung des Thumbnail-Features
+                    # gescannt wurden - kein erneutes ffprobe nötig.
+                    if not get_thumbnail_path(existing["id"]).is_file():
+                        generate_thumbnail(existing["id"], path, existing["duration_seconds"])
                     continue
 
                 meta = _probe(path)
-                conn.execute(
+                cursor = conn.execute(
                     "INSERT INTO videos (filepath, title, duration_seconds, codec) "
                     "VALUES (?, ?, ?, ?)",
                     (rel_path, path.stem, meta["duration_seconds"], meta["codec"]),
                 )
+                generate_thumbnail(cursor.lastrowid, path, meta["duration_seconds"])
                 added += 1
 
     with get_db() as conn:
-        existing_paths = [
-            row["filepath"] for row in conn.execute("SELECT filepath FROM videos").fetchall()
-        ]
+        existing = conn.execute("SELECT id, filepath FROM videos").fetchall()
         removed = 0
-        for filepath in existing_paths:
-            if filepath not in found_paths:
-                conn.execute("DELETE FROM videos WHERE filepath = ?", (filepath,))
+        for row in existing:
+            if row["filepath"] not in found_paths:
+                conn.execute("DELETE FROM videos WHERE id = ?", (row["id"],))
+                get_thumbnail_path(row["id"]).unlink(missing_ok=True)
+                get_transcode_cache_path(row["id"]).unlink(missing_ok=True)
                 removed += 1
 
     return {"added": added, "removed": removed, "unchanged": skipped_existing}

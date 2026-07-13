@@ -87,6 +87,19 @@ def scan_videos(admin=Depends(require_admin)):
     return RedirectResponse(url=f"/admin/videos?scan_result={summary}", status_code=303)
 
 
+@router.post("/videos/{video_id}/rename")
+def rename_video(video_id: int, title: str = Form(...), admin=Depends(require_admin)):
+    title = title.strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Titel darf nicht leer sein.")
+    with get_db() as conn:
+        existing = conn.execute("SELECT id FROM videos WHERE id = ?", (video_id,)).fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Video nicht gefunden.")
+        conn.execute("UPDATE videos SET title = ? WHERE id = ?", (title, video_id))
+    return RedirectResponse(url="/admin/videos", status_code=303)
+
+
 def _fetch_user_or_404(user_id: int):
     with get_db() as conn:
         target = conn.execute(

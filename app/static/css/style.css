@@ -180,24 +180,66 @@ button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 /* Video grid (Teil 2) */
 .video-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 24px;
 }
 
 .video-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px;
     color: var(--text);
     text-decoration: none;
     display: block;
-    transition: background 0.15s, border-color 0.15s;
 }
 
-.video-card:hover {
-    background: var(--surface-hover);
+.video-thumb {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.video-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.2s;
+}
+
+.video-card:hover .video-thumb img {
+    transform: scale(1.03);
+}
+
+.video-card:hover .video-thumb {
     border-color: var(--accent-dim);
+}
+
+.video-duration {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    background: rgba(12, 15, 20, 0.8);
+    color: var(--text);
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 0.72rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.video-meta {
+    padding: 10px 2px 0;
+}
+
+.video-title {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
 }
 
 .video-player {
@@ -272,6 +314,29 @@ button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
     border: 1px solid var(--border);
     padding: 6px 10px;
     font-weight: 400;
+    font-size: 0.82rem;
+}
+
+/* Video-Katalog: Umbenennen */
+.rename-form {
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+    margin: 0;
+}
+
+.rename-form input[type="text"] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    color: var(--text);
+    font-size: 0.82rem;
+    width: 200px;
+}
+
+.rename-form button {
+    padding: 6px 10px;
     font-size: 0.82rem;
 }
 

@@ -13,7 +13,7 @@
 
 <table class="user-table">
     <thead>
-        <tr><th>Titel</th><th>Pfad</th><th>Dauer</th><th>Codec</th><th>Hinzugefügt</th></tr>
+        <tr><th>Titel</th><th>Pfad</th><th>Dauer</th><th>Codec</th><th>Hinzugefügt</th><th></th></tr>
     </thead>
     <tbody>
         {% for v in videos %}
@@ -29,10 +29,16 @@
             </td>
             <td>{{ v["codec"] or "-" }}</td>
             <td class="mono">{{ v["added_at"] }}</td>
+            <td>
+                <form class="rename-form" method="post" action="/admin/videos/{{ v['id'] }}/rename">
+                    <input type="text" name="title" value="{{ v['title'] }}" required>
+                    <button type="submit">Umbenennen</button>
+                </form>
+            </td>
         </tr>
         {% endfor %}
         {% if not videos %}
-        <tr><td colspan="5">Noch keine Videos im Katalog. Verzeichnis einlesen, um loszulegen.</td></tr>
+        <tr><td colspan="6">Noch keine Videos im Katalog. Verzeichnis einlesen, um loszulegen.</td></tr>
         {% endif %}
     </tbody>
 </table>

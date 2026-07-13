@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 from ..auth import require_login
 from ..catalog import VIDEOS_DIR
 from ..media import get_authorized_video
+from ..transcode import ensure_transcoded, needs_transcode
 
 router = APIRouter()
 
@@ -19,6 +20,12 @@ def stream_video(video_id: int, request: Request, user=Depends(require_login)):
     filepath = VIDEOS_DIR / video["filepath"]
     if not filepath.is_file():
         raise HTTPException(status_code=404, detail="Datei nicht (mehr) vorhanden.")
+
+    if needs_transcode(video["codec"]):
+        try:
+            filepath = ensure_transcoded(video_id, filepath)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     file_size = filepath.stat().st_size
     range_header = request.headers.get("range")

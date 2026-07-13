@@ -16,10 +16,11 @@ services:
       - SESSION_SECRET=${SESSION_SECRET:-}
       - VIDEOS_DIR=/videos
       - PYTHONUNBUFFERED=1
+      - VAAPI_DEVICE=${VAAPI_DEVICE:-/dev/dri/renderD128}
     restart: unless-stopped
 
-    # Wird erst ab Teil 2 gebraucht (VAAPI-Transcoding über die Arc A380).
-    # Schon vorbereitet, damit wir es dann nur noch einkommentieren müssen -
-    # entspricht dem, was wir im VAAPI-Test schon erfolgreich durchgetestet haben.
-    # devices:
-    #   - /dev/dri/renderD128:/dev/dri/renderD128
+    # VAAPI-Transcoding über eine Intel-GPU (z.B. Arc A380). Pfad über
+    # VAAPI_DEVICE in .env anpassen, falls die Karte an einem anderen
+    # /dev/dri/renderDXXX-Node hängt (mehrere GPUs im System möglich).
+    devices:
+      - "${VAAPI_DEVICE:-/dev/dri/renderD128}:/dev/dri/renderD128"

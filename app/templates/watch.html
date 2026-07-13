@@ -10,10 +10,10 @@
 </video>
 
 {% if video["codec"] and video["codec"] not in ("h264", "vp9", "vp8", "av1") %}
-<p class="alert">
-    Codec dieser Datei: <strong>{{ video["codec"] }}</strong>. Viele Browser spielen das
-    nicht direkt ab (z.B. HEVC/H.265 ohne Hardware-Unterstützung) - falls das Bild
-    schwarz bleibt, ist das erwartet und wird mit dem Transcoding-Schritt behoben.
+<p class="muted">
+    Codec dieser Datei: <strong>{{ video["codec"] }}</strong> - wird beim ersten
+    Abspielen einmalig per GPU (VAAPI) nach H.264 transkodiert und danach aus
+    dem Cache ausgeliefert. Der erste Ladevorgang kann daher etwas dauern.
 </p>
 {% endif %}
 {% endblock %}

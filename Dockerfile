@@ -3,8 +3,14 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # ffprobe (Teil von ffmpeg) wird für den Katalog-Scan gebraucht, um Dauer
-# und Codec der Videodateien auszulesen.
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+# und Codec der Videodateien auszulesen. intel-media-va-driver-non-free liefert
+# den VAAPI-Treiber (iHD) für Hardware-Transcoding auf Intel-GPUs (z.B. Arc A380) -
+# liegt im "non-free"-Repo, daher wird das Component-Set erweitert.
+RUN sed -i 's/Components: main/Components: main contrib non-free non-free-firmware/' \
+        /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ffmpeg intel-media-va-driver-non-free vainfo \
     && rm -rf /var/lib/apt/lists/*
 
 # Erst nur requirements.txt kopieren, damit Docker diesen Layer cachen kann

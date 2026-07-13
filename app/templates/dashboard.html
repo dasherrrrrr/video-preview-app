@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Meine Videos{% endblock %}
+{% block content %}
+<h1>Meine Videos</h1>
+{% if videos %}
+<div class="video-grid">
+    {% for video in videos %}
+    <div class="video-card">{{ video["title"] }}</div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <p>Noch keine Videos freigegeben.</p>
+    <p class="muted">Der Videokatalog wird im nächsten Bauabschnitt angebunden.</p>
+</div>
+{% endif %}
+{% endblock %}

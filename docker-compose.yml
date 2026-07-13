@@ -1,0 +1,23 @@
+services:
+  video-preview:
+    build: .
+    container_name: video-preview
+    ports:
+      - "8000:8000"
+    volumes:
+      # Datenbank - MUSS gemountet sein, sonst sind User/Marker beim Update weg
+      - ./data:/app/data
+      # Deine Videodateien, read-only eingebunden (die App muss dort nichts schreiben)
+      - /mnt/user/videos:/videos:ro
+    environment:
+      # Fester Secret-Key, damit Logins nicht bei jedem Container-Neustart
+      # ungültig werden. Vor dem ersten Start durch einen eigenen Zufallswert
+      # ersetzen, z.B. mit: openssl rand -hex 32
+      - SESSION_SECRET=bitte-hier-einen-zufaelligen-wert-eintragen
+    restart: unless-stopped
+
+    # Wird erst ab Teil 2 gebraucht (VAAPI-Transcoding über die Arc A380).
+    # Schon vorbereitet, damit wir es dann nur noch einkommentieren müssen -
+    # entspricht dem, was wir im VAAPI-Test schon erfolgreich durchgetestet haben.
+    # devices:
+    #   - /dev/dri/renderD128:/dev/dri/renderD128

@@ -1,0 +1,229 @@
+/* Design-Tokens
+   Hintergrund:  #14171c (Slate, fast schwarz)
+   Fläche:       #1c212b
+   Text:         #e6e9ef
+   Gedämpft:     #8892a0
+   Akzent:       #45c2b8 (Teal - technisch, ruhig, kein Standard-Blau)
+   Fehler:       #e8756b
+   Schrift:      Systemschrift für Text, Monospace für Metadaten/Timestamps
+*/
+
+:root {
+    --bg: #14171c;
+    --surface: #1c212b;
+    --surface-hover: #232a36;
+    --text: #e6e9ef;
+    --muted: #8892a0;
+    --accent: #45c2b8;
+    --accent-dim: #2c7c76;
+    --error: #e8756b;
+    --border: #2a3140;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+}
+
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 28px;
+    border-bottom: 1px solid var(--border);
+}
+
+.brand {
+    color: var(--text);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 1.05rem;
+    letter-spacing: 0.01em;
+}
+
+.brand-mark {
+    color: var(--accent);
+    margin-right: 6px;
+}
+
+.topnav {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    font-size: 0.9rem;
+}
+
+.topnav a {
+    color: var(--muted);
+    text-decoration: none;
+}
+
+.topnav a:hover {
+    color: var(--text);
+}
+
+.topnav-user {
+    color: var(--accent);
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+}
+
+.content {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 40px 28px;
+}
+
+h1 {
+    font-size: 1.6rem;
+    margin: 0 0 24px;
+}
+
+h2 {
+    font-size: 1.1rem;
+    margin: 40px 0 16px;
+    color: var(--muted);
+    font-weight: 600;
+}
+
+/* Login */
+.login-wrap {
+    display: flex;
+    justify-content: center;
+    padding-top: 8vh;
+}
+
+.login-card, .card-form {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px;
+    width: 100%;
+    max-width: 340px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.login-card h1 {
+    margin: 0 0 4px;
+}
+
+label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.checkbox-label {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.checkbox-label input { width: auto; }
+
+input[type="text"], input[type="password"] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-size: 0.95rem;
+}
+
+input[type="text"]:focus, input[type="password"]:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+button {
+    background: var(--accent);
+    color: #0c1210;
+    border: none;
+    border-radius: 6px;
+    padding: 11px 16px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+button:hover { background: #57d2c8; }
+button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+
+.alert {
+    background: rgba(232, 117, 107, 0.12);
+    border: 1px solid var(--error);
+    color: var(--error);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+/* Empty state */
+.empty-state {
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    padding: 48px 24px;
+    text-align: center;
+}
+
+.muted { color: var(--muted); }
+
+/* Video grid (Teil 2) */
+.video-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+}
+
+.video-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+/* Nutzer-Tabelle */
+.user-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.user-table th, .user-table td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+}
+
+.user-table th {
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.user-table tr:last-child td { border-bottom: none; }
+
+.mono {
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+}

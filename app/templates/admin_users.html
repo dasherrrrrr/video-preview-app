@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Nutzerverwaltung{% endblock %}
+{% block content %}
+<h1>Nutzerverwaltung</h1>
+
+<table class="user-table">
+    <thead>
+        <tr><th>Benutzername</th><th>Rolle</th><th>Angelegt</th></tr>
+    </thead>
+    <tbody>
+        {% for u in users %}
+        <tr>
+            <td>{{ u["username"] }}</td>
+            <td>{% if u["is_admin"] %}Admin{% else %}Nutzer{% endif %}</td>
+            <td class="mono">{{ u["created_at"] }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<h2>Neuen Nutzer anlegen</h2>
+{% if error %}
+<p class="alert">{{ error }}</p>
+{% endif %}
+<form class="card-form" method="post" action="/admin/users">
+    <label>
+        Benutzername
+        <input type="text" name="username" required>
+    </label>
+    <label>
+        Passwort
+        <input type="password" name="password" required>
+    </label>
+    <label class="checkbox-label">
+        <input type="checkbox" name="is_admin">
+        Admin-Rechte geben
+    </label>
+    <button type="submit">Nutzer anlegen</button>
+</form>
+{% endblock %}

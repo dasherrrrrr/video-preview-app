@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Video Preview{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <header class="topbar">
+        <a href="/" class="brand">
+            <span class="brand-mark">▶</span> Video Preview
+        </a>
+        {% if user %}
+        <nav class="topnav">
+            <span class="topnav-user">{{ user["username"] }}</span>
+            {% if user["is_admin"] %}
+            <a href="/admin/users">Nutzerverwaltung</a>
+            {% endif %}
+            <a href="/logout">Abmelden</a>
+        </nav>
+        {% endif %}
+    </header>
+    <main class="content">
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

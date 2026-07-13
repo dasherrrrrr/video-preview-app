@@ -40,10 +40,11 @@ nicht in Git, server-spezifische Werte bleiben also bei jedem Pull unangetastet.
 - ✅ Verzeichnis mit den Videodateien einlesen (Katalog-Scan + `ffprobe` für Metadaten,
   Admin-Bereich unter `/admin/videos`). Pfad wird über die Umgebungsvariable
   `VIDEOS_DIR` gesteuert (Default `/videos`, im Docker-Compose entsprechend gemountet).
+- ✅ Videos den Nutzern zuweisen: `/admin/users/<id>/permissions` (Link aus der
+  Nutzerverwaltung), befüllt die `permissions`-Tabelle. Das Dashboard (`/`) zeigt
+  jedem Nutzer nur die ihm zugewiesenen Videos (noch ohne Player, s.u.).
 
 ## Was als Nächstes kommt
-
-- Videos den Nutzern über die Admin-Oberfläche zuweisen (permissions-Tabelle befüllen)
 - Video-Player im Dashboard mit Streaming-Endpoint (Direct Play + VAAPI-Transcode
   für H.265, siehe die Docker/VAAPI-Tests, die wir schon gemacht haben)
 - Marker setzen und anzeigen

@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -85,3 +85,52 @@ def scan_videos(admin=Depends(require_admin)):
     result = scan_library()
     summary = f"{result['added']} neu, {result['removed']} entfernt, {result['unchanged']} unverändert"
     return RedirectResponse(url=f"/admin/videos?scan_result={summary}", status_code=303)
+
+
+def _fetch_user_or_404(user_id: int):
+    with get_db() as conn:
+        target = conn.execute(
+            "SELECT id, username FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+    if not target:
+        raise HTTPException(status_code=404, detail="Nutzer nicht gefunden.")
+    return target
+
+
+@router.get("/users/{user_id}/permissions")
+def edit_permissions(user_id: int, request: Request, admin=Depends(require_admin)):
+    target = _fetch_user_or_404(user_id)
+    with get_db() as conn:
+        videos = conn.execute(
+            "SELECT id, filepath, title FROM videos ORDER BY filepath"
+        ).fetchall()
+        assigned_ids = {
+            row["video_id"]
+            for row in conn.execute(
+                "SELECT video_id FROM permissions WHERE user_id = ?", (user_id,)
+            ).fetchall()
+        }
+    return templates.TemplateResponse(
+        "admin_permissions.html",
+        {
+            "request": request,
+            "user": admin,
+            "target": target,
+            "videos": videos,
+            "assigned_ids": assigned_ids,
+        },
+    )
+
+
+@router.post("/users/{user_id}/permissions")
+async def update_permissions(user_id: int, request: Request, admin=Depends(require_admin)):
+    _fetch_user_or_404(user_id)
+    form = await request.form()
+    video_ids = [int(v) for v in form.getlist("video_ids")]
+    with get_db() as conn:
+        conn.execute("DELETE FROM permissions WHERE user_id = ?", (user_id,))
+        conn.executemany(
+            "INSERT INTO permissions (user_id, video_id) VALUES (?, ?)",
+            [(user_id, video_id) for video_id in video_ids],
+        )
+    return RedirectResponse(url=f"/admin/users/{user_id}/permissions", status_code=303)

@@ -44,6 +44,8 @@ nicht in Git, server-spezifische Werte bleiben also bei jedem Pull unangetastet.
   einmalig nach H.264 transkodiert und in `data/transcoded/` gecacht - browserkompatible
   Codecs (h264/vp8/vp9/av1) laufen direkt per Direct Play
 - Marker setzen/anzeigen/löschen pro Nutzer und Video, mit Sprung-zu-Zeitpunkt im Player
+- Kommentare pro Video: sichtbar für alle Nutzer mit Zugriff (nicht privat wie Marker),
+  für Status-Austausch zwischen Admin und Nutzern. Löschen: eigener Kommentar oder Admin
 - Dunkles UI ohne Frameworks (reines CSS)
 
 ## Was als Nächstes kommen könnte

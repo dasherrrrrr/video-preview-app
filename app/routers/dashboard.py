@@ -37,7 +37,19 @@ def watch(video_id: int, request: Request, user=Depends(require_login)):
             "WHERE user_id = ? AND video_id = ? ORDER BY timestamp_seconds",
             (user["id"], video_id),
         ).fetchall()
+        comments = conn.execute(
+            "SELECT c.id, c.body, c.created_at, c.user_id, u.username "
+            "FROM comments c JOIN users u ON u.id = c.user_id "
+            "WHERE c.video_id = ? ORDER BY c.created_at",
+            (video_id,),
+        ).fetchall()
     return templates.TemplateResponse(
         "watch.html",
-        {"request": request, "user": user, "video": video, "markers": markers},
+        {
+            "request": request,
+            "user": user,
+            "video": video,
+            "markers": markers,
+            "comments": comments,
+        },
     )

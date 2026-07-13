@@ -73,5 +73,16 @@ def init_db() -> None:
                 label TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
+
+            -- Kommentare zu einem Video, sichtbar für alle Nutzer mit Zugriff
+            -- auf das Video (nicht privat wie Marker) - für Status-Austausch
+            -- zwischen Admin und Nutzern.
+            CREATE TABLE IF NOT EXISTS comments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                video_id INTEGER NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+                body TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
             """
         )

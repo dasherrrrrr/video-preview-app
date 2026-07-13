@@ -43,6 +43,35 @@
 <p class="muted">Noch keine Marker gesetzt.</p>
 {% endif %}
 
+<h2>Kommentare</h2>
+<p class="muted">Sichtbar für alle, die Zugriff auf dieses Video haben - z.B. für Status-Rückmeldungen.</p>
+
+<form class="comment-form" method="post" action="/watch/{{ video['id'] }}/comments">
+    <textarea name="body" rows="3" placeholder="Kommentar schreiben..." maxlength="2000" required></textarea>
+    <button type="submit">Kommentieren</button>
+</form>
+
+{% if comments %}
+<ul class="comment-list">
+    {% for c in comments %}
+    <li>
+        <div class="comment-head">
+            <span class="comment-author">{{ c["username"] }}</span>
+            <span class="mono">{{ c["created_at"] }}</span>
+        </div>
+        <p class="comment-body">{{ c["body"] }}</p>
+        {% if c["user_id"] == user["id"] or user["is_admin"] %}
+        <form method="post" action="/watch/{{ video['id'] }}/comments/{{ c['id'] }}/delete">
+            <button type="submit" class="marker-delete">Löschen</button>
+        </form>
+        {% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p class="muted">Noch keine Kommentare.</p>
+{% endif %}
+
 <script>
     const player = document.getElementById("player");
     document.getElementById("marker-form").addEventListener("submit", () => {

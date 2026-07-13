@@ -12,15 +12,21 @@ router = APIRouter()
 def create_marker(
     video_id: int,
     timestamp_seconds: float = Form(...),
-    label: str = Form(""),
+    label: str = Form(...),
     user=Depends(require_login),
 ):
     get_authorized_video(video_id, user)  # wirft 403/404, falls kein Zugriff
+    label = label.strip()
+    if not label:
+        raise HTTPException(
+            status_code=400,
+            detail="Marker brauchen eine Beschreibung (was soll an dieser Stelle anders sein oder gefällt).",
+        )
     with get_db() as conn:
         conn.execute(
             "INSERT INTO markers (user_id, video_id, timestamp_seconds, label) "
             "VALUES (?, ?, ?, ?)",
-            (user["id"], video_id, timestamp_seconds, label or None),
+            (user["id"], video_id, timestamp_seconds, label),
         )
     return RedirectResponse(url=f"/watch/{video_id}", status_code=303)
 

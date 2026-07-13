@@ -5,7 +5,7 @@
 
 <table class="user-table">
     <thead>
-        <tr><th>Video</th><th>Nutzer</th><th>Zeitstempel</th><th>Notiz</th><th>Erstellt</th></tr>
+        <tr><th>Video</th><th>Nutzer</th><th>Zeitstempel</th><th>Beschreibung</th><th>Erstellt</th></tr>
     </thead>
     <tbody>
         {% for m in markers %}
@@ -13,7 +13,7 @@
             <td><a href="/watch/{{ m['video_id'] }}">{{ m["video_title"] }}</a></td>
             <td>{{ m["username"] }}</td>
             <td class="mono">{{ (m["timestamp_seconds"] // 60) | int }}:{{ "%02d" | format(m["timestamp_seconds"] % 60) }}</td>
-            <td>{{ m["label"] or "" }}</td>
+            <td>{{ m["label"] }}</td>
             <td class="mono">{{ m["created_at"] }}</td>
         </tr>
         {% endfor %}

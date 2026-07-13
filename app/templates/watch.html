@@ -18,10 +18,12 @@
 {% endif %}
 
 <h2>Marker</h2>
+<p class="muted">Jeder Marker braucht eine Beschreibung: was soll sich der Kunde an dieser
+    Stelle anders vorstellt, oder was findet er gut?</p>
 
 <form id="marker-form" class="marker-form" method="post" action="/watch/{{ video['id'] }}/markers">
     <input type="hidden" id="marker-timestamp" name="timestamp_seconds" value="0">
-    <input type="text" name="label" placeholder="Notiz (optional)" maxlength="200">
+    <input type="text" name="label" placeholder="z.B. Übergang hier zu abrupt, oder: Farbstimmung gefällt gut" maxlength="500" required>
     <button type="submit">Marker bei aktueller Position setzen</button>
 </form>
 
@@ -32,7 +34,7 @@
         <button type="button" class="marker-jump" data-seconds="{{ m['timestamp_seconds'] }}">
             {{ (m["timestamp_seconds"] // 60) | int }}:{{ "%02d" | format(m["timestamp_seconds"] % 60) }}
         </button>
-        <span>{{ m["label"] or "" }}</span>
+        <span>{{ m["label"] }}</span>
         <form method="post" action="/watch/{{ video['id'] }}/markers/{{ m['id'] }}/delete">
             <button type="submit" class="marker-delete">Löschen</button>
         </form>

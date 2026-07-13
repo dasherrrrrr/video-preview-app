@@ -31,6 +31,13 @@ def dashboard(request: Request, user=Depends(require_login)):
 @router.get("/watch/{video_id}")
 def watch(video_id: int, request: Request, user=Depends(require_login)):
     video = get_authorized_video(video_id, user)
+    with get_db() as conn:
+        markers = conn.execute(
+            "SELECT id, timestamp_seconds, label FROM markers "
+            "WHERE user_id = ? AND video_id = ? ORDER BY timestamp_seconds",
+            (user["id"], video_id),
+        ).fetchall()
     return templates.TemplateResponse(
-        "watch.html", {"request": request, "user": user, "video": video}
+        "watch.html",
+        {"request": request, "user": user, "video": video, "markers": markers},
     )

@@ -32,6 +32,10 @@ nicht in Git, server-spezifische Werte bleiben also bei jedem Pull unangetastet.
 - Rechtetrennung: normale Nutzer bekommen 403 auf Admin-Seiten
 - Katalog-Scan (`/admin/videos`): liest `VIDEOS_DIR` rekursiv ein, holt Dauer/Codec
   per `ffprobe`, hält die `videos`-Tabelle mit dem Dateisystem synchron
+- Thumbnails: automatisch per `ffmpeg`-Frame beim Scan erzeugt, Admins können pro
+  Video ein eigenes PNG/JPG hochladen (`/admin/videos/<id>/thumbnail`) - überschreibt
+  das automatische Bild dauerhaft, auch über künftige Scans hinweg
+- Admin kann Video-Titel umbenennen (`/admin/videos/<id>/rename`)
 - Video-Zuweisung (`/admin/users/<id>/permissions`): befüllt die `permissions`-Tabelle,
   das Dashboard (`/`) zeigt jedem Nutzer nur seine freigegebenen Videos
 - Player (`/watch/<id>`) mit Range-Request-fähigem Streaming-Endpoint (`/stream/<id>`),

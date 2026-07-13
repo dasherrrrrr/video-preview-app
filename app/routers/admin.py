@@ -1,13 +1,18 @@
+import tempfile
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from ..auth import hash_password, require_admin
 from ..catalog import scan_library
 from ..database import get_db
+from ..thumbnails import set_custom_thumbnail
+
+ALLOWED_THUMBNAIL_TYPES = {"image/png", "image/jpeg"}
+MAX_THUMBNAIL_SIZE = 15 * 1024 * 1024  # 15 MB
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
@@ -97,6 +102,38 @@ def rename_video(video_id: int, title: str = Form(...), admin=Depends(require_ad
         if not existing:
             raise HTTPException(status_code=404, detail="Video nicht gefunden.")
         conn.execute("UPDATE videos SET title = ? WHERE id = ?", (title, video_id))
+    return RedirectResponse(url="/admin/videos", status_code=303)
+
+
+@router.post("/videos/{video_id}/thumbnail")
+async def upload_thumbnail(
+    video_id: int,
+    thumbnail_file: UploadFile = File(...),
+    admin=Depends(require_admin),
+):
+    with get_db() as conn:
+        existing = conn.execute("SELECT id FROM videos WHERE id = ?", (video_id,)).fetchone()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Video nicht gefunden.")
+
+    if thumbnail_file.content_type not in ALLOWED_THUMBNAIL_TYPES:
+        raise HTTPException(status_code=400, detail="Nur PNG oder JPG erlaubt.")
+
+    contents = await thumbnail_file.read(MAX_THUMBNAIL_SIZE + 1)
+    if len(contents) > MAX_THUMBNAIL_SIZE:
+        raise HTTPException(status_code=400, detail="Datei zu groß (max. 15 MB).")
+
+    suffix = Path(thumbnail_file.filename or "").suffix or ".jpg"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(contents)
+        tmp_path = Path(tmp.name)
+    try:
+        set_custom_thumbnail(video_id, tmp_path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
     return RedirectResponse(url="/admin/videos", status_code=303)
 
 

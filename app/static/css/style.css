@@ -375,6 +375,35 @@ button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
     font-size: 0.82rem;
 }
 
+.thumb-preview {
+    width: 72px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 4px;
+    background: var(--bg);
+    display: block;
+}
+
+.thumb-upload-form {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+}
+
+.thumb-upload-form input[type="file"] {
+    font-size: 0.78rem;
+    color: var(--muted);
+    max-width: 160px;
+}
+
+.thumb-upload-form button {
+    padding: 6px 10px;
+    font-size: 0.82rem;
+    white-space: nowrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; }
 }

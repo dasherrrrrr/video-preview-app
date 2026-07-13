@@ -38,3 +38,28 @@ def generate_thumbnail(video_id: int, source_path: Path, duration_seconds: float
         subprocess.run(cmd, check=True, capture_output=True, timeout=30)
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         dest_path.unlink(missing_ok=True)
+
+
+def set_custom_thumbnail(video_id: int, upload_path: Path) -> None:
+    """Ersetzt das Vorschaubild durch ein von einem Admin hochgeladenes
+    PNG/JPG. Läuft durch ffmpeg, damit am Ende immer dasselbe Format/dieselbe
+    Größe wie bei automatisch erzeugten Thumbnails rauskommt - der
+    Streaming-Endpoint muss also nicht zwischen beiden unterscheiden.
+    Ein manuell gesetztes Thumbnail bleibt bei künftigen Katalog-Scans
+    unangetastet (die prüfen nur, ob die Datei schon existiert)."""
+    THUMBNAIL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    dest_path = get_thumbnail_path(video_id)
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", str(upload_path),
+        "-frames:v", "1",
+        "-vf", "scale=480:-1",
+        "-q:v", "4",
+        str(dest_path),
+    ]
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, timeout=30)
+    except subprocess.CalledProcessError as exc:
+        raise ValueError("Datei konnte nicht als Bild gelesen werden.") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise ValueError("Zeitlimit beim Verarbeiten des Bilds überschritten.") from exc

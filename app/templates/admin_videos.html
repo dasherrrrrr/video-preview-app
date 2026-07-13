@@ -13,11 +13,13 @@
 
 <table class="user-table">
     <thead>
-        <tr><th>Titel</th><th>Pfad</th><th>Dauer</th><th>Codec</th><th>Hinzugefügt</th><th></th></tr>
+        <tr><th></th><th>Titel</th><th>Pfad</th><th>Dauer</th><th>Codec</th><th>Hinzugefügt</th><th></th><th></th></tr>
     </thead>
     <tbody>
         {% for v in videos %}
         <tr>
+            <td><img class="thumb-preview" src="/thumbnail/{{ v['id'] }}" alt="" loading="lazy"
+                onerror="this.style.visibility='hidden'"></td>
             <td>{{ v["title"] }}</td>
             <td class="mono">{{ v["filepath"] }}</td>
             <td>
@@ -35,10 +37,16 @@
                     <button type="submit">Umbenennen</button>
                 </form>
             </td>
+            <td>
+                <form class="thumb-upload-form" method="post" action="/admin/videos/{{ v['id'] }}/thumbnail" enctype="multipart/form-data">
+                    <input type="file" name="thumbnail_file" accept="image/png,image/jpeg" required>
+                    <button type="submit">Thumbnail hochladen</button>
+                </form>
+            </td>
         </tr>
         {% endfor %}
         {% if not videos %}
-        <tr><td colspan="6">Noch keine Videos im Katalog. Verzeichnis einlesen, um loszulegen.</td></tr>
+        <tr><td colspan="8">Noch keine Videos im Katalog. Verzeichnis einlesen, um loszulegen.</td></tr>
         {% endif %}
     </tbody>
 </table>

@@ -5,7 +5,7 @@
 {% if videos %}
 <div class="video-grid">
     {% for video in videos %}
-    <div class="video-card">{{ video["title"] }}</div>
+    <a class="video-card" href="/watch/{{ video['id'] }}">{{ video["title"] }}</a>
     {% endfor %}
 </div>
 {% else %}

@@ -189,6 +189,23 @@ button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 16px;
+    color: var(--text);
+    text-decoration: none;
+    display: block;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.video-card:hover {
+    background: var(--surface-hover);
+    border-color: var(--accent-dim);
+}
+
+.video-player {
+    width: 100%;
+    max-height: 70vh;
+    background: #000;
+    border-radius: 8px;
+    display: block;
 }
 
 /* Nutzer-Tabelle */

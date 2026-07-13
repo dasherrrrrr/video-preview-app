@@ -5,6 +5,7 @@ from fastapi.templating import Jinja2Templates
 
 from ..auth import require_login
 from ..database import get_db
+from ..media import get_authorized_video
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
@@ -24,4 +25,12 @@ def dashboard(request: Request, user=Depends(require_login)):
         ).fetchall()
     return templates.TemplateResponse(
         "dashboard.html", {"request": request, "user": user, "videos": videos}
+    )
+
+
+@router.get("/watch/{video_id}")
+def watch(video_id: int, request: Request, user=Depends(require_login)):
+    video = get_authorized_video(video_id, user)
+    return templates.TemplateResponse(
+        "watch.html", {"request": request, "user": user, "video": video}
     )

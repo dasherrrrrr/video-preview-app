@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}{{ video["title"] }}{% endblock %}
+{% block content %}
+<p class="muted"><a href="/">&larr; zurück zur Übersicht</a></p>
+<h1>{{ video["title"] }}</h1>
+
+<video class="video-player" controls preload="metadata">
+    <source src="/stream/{{ video['id'] }}" type="video/mp4">
+    Dein Browser unterstützt keine Video-Wiedergabe.
+</video>
+
+{% if video["codec"] and video["codec"] not in ("h264", "vp9", "vp8", "av1") %}
+<p class="alert">
+    Codec dieser Datei: <strong>{{ video["codec"] }}</strong>. Viele Browser spielen das
+    nicht direkt ab (z.B. HEVC/H.265 ohne Hardware-Unterstützung) - falls das Bild
+    schwarz bleibt, ist das erwartet und wird mit dem Transcoding-Schritt behoben.
+</p>
+{% endif %}
+{% endblock %}

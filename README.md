@@ -18,7 +18,7 @@ Danach im Browser: http://localhost:8000
 ```bash
 git clone https://github.com/dasherrrrrr/video-preview-app.git
 cd video-preview-app
-cp .env.example .env   # HOST_PORT, VIDEOS_HOST_PATH, SESSION_SECRET, VAAPI_DEVICE anpassen
+cp .env.example .env   # HOST_PORT, VIDEOS_HOST_PATH, SESSION_SECRET, VAAPI_DEVICE, SMTP_* anpassen
 docker compose up -d --build
 ```
 
@@ -55,12 +55,11 @@ nicht in Git, server-spezifische Werte bleiben also bei jedem Pull unangetastet.
   festlegen (Nutzerverwaltung, Dropdown) - Grundlage für den späteren Mailversand
 - Bulk-Zuweisung nach Ordner: `/admin/users/<id>/permissions` gruppiert Videos nach
   Ordner (z.B. Datumsordner der DJI-Clips) mit einer "alle in diesem Ordner"-Checkbox
+- Mailversand: schreibt ein Kunde (kein Admin) einen Kommentar, bekommt sein
+  zugewiesener Bearbeiter automatisch eine Mail (`app/mailer.py`, frei konfigurierbarer
+  SMTP-Server über `.env` - Gmail, web.de, GMX, eigener Server, ...). Ohne gesetztes
+  `SMTP_HOST` bleibt der Versand einfach aus, kein Fehler
 - Dunkles UI ohne Frameworks (reines CSS)
-
-## Was als Nächstes kommen könnte
-
-- Mailversand an zugewiesene Bearbeiter, wenn ein Kunde einen neuen Kommentar
-  schreibt (braucht SMTP-Anbindung, aktuell noch nicht umgesetzt)
 
 ## Projektstruktur
 

@@ -5,13 +5,15 @@
 
 <table class="user-table">
     <thead>
-        <tr><th>Benutzername</th><th>Rolle</th><th>Angelegt</th><th></th></tr>
+        <tr><th>Benutzername</th><th>Rolle</th><th>E-Mail</th><th>Telefon</th><th>Angelegt</th><th></th></tr>
     </thead>
     <tbody>
         {% for u in users %}
         <tr>
             <td>{{ u["username"] }}</td>
             <td>{% if u["is_admin"] %}Admin{% else %}Nutzer{% endif %}</td>
+            <td class="mono">{{ u["email"] or "-" }}</td>
+            <td class="mono">{{ u["phone"] or "-" }}</td>
             <td class="mono">{{ u["created_at"] }}</td>
             <td><a href="/admin/users/{{ u['id'] }}/permissions">Videos zuweisen</a></td>
         </tr>

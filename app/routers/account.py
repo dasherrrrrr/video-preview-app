@@ -1,6 +1,9 @@
+import re
 from pathlib import Path
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Request
+from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from ..auth import hash_password, require_login, verify_password
@@ -10,12 +13,46 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templa
 
 router = APIRouter()
 
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+CONTACT_SUCCESS = "Kontaktdaten gespeichert."
+
 
 @router.get("/account")
-def account(request: Request, user=Depends(require_login)):
+def account(request: Request, user=Depends(require_login), success: Optional[str] = None):
+    success_message = CONTACT_SUCCESS if success == "contact" else None
     return templates.TemplateResponse(
-        "account.html", {"request": request, "user": user, "error": None, "success": None}
+        "account.html",
+        {"request": request, "user": user, "error": None, "success": success_message},
     )
+
+
+@router.post("/account/contact")
+def update_contact(
+    request: Request,
+    email: str = Form(""),
+    phone: str = Form(""),
+    user=Depends(require_login),
+):
+    email = email.strip()
+    phone = phone.strip()
+    if email and not EMAIL_RE.match(email):
+        return templates.TemplateResponse(
+            "account.html",
+            {
+                "request": request,
+                "user": user,
+                "error": "Bitte eine gültige E-Mail-Adresse angeben.",
+                "success": None,
+            },
+            status_code=400,
+        )
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE users SET email = ?, phone = ? WHERE id = ?",
+            (email or None, phone or None, user["id"]),
+        )
+    return RedirectResponse(url="/account?success=contact", status_code=303)
 
 
 @router.post("/account/password")

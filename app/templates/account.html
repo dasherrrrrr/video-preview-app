@@ -4,14 +4,29 @@
 <h1>Mein Konto</h1>
 <p class="muted">Angemeldet als <strong>{{ user["username"] }}</strong></p>
 
-<h2>Passwort ändern</h2>
-
 {% if error %}
 <p class="alert">{{ error }}</p>
 {% endif %}
 {% if success %}
 <p class="alert alert-success">{{ success }}</p>
 {% endif %}
+
+<h2>Kontaktdaten</h2>
+<p class="muted">Damit wir dich bei Rückfragen erreichen können.</p>
+
+<form class="card-form" method="post" action="/account/contact">
+    <label>
+        E-Mail-Adresse
+        <input type="email" name="email" value="{{ user['email'] or '' }}" placeholder="name@beispiel.de">
+    </label>
+    <label>
+        Telefonnummer
+        <input type="text" name="phone" value="{{ user['phone'] or '' }}" placeholder="+49 151 23456789">
+    </label>
+    <button type="submit">Kontaktdaten speichern</button>
+</form>
+
+<h2>Passwort ändern</h2>
 
 <form class="card-form" method="post" action="/account/password">
     <label>

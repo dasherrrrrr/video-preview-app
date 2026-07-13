@@ -22,7 +22,7 @@ router = APIRouter(prefix="/admin")
 def _fetch_users():
     with get_db() as conn:
         return conn.execute(
-            "SELECT id, username, is_admin, created_at FROM users ORDER BY id"
+            "SELECT id, username, is_admin, email, phone, created_at FROM users ORDER BY id"
         ).fetchall()
 
 

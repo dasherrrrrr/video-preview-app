@@ -49,9 +49,16 @@ nicht in Git, server-spezifische Werte bleiben also bei jedem Pull unangetastet.
   für Status-Austausch zwischen Admin und Nutzern. Löschen: eigener Kommentar oder Admin
 - Admin-Übersicht über alle Marker aller Nutzer (`/admin/markers`)
 - Eigenes Passwort ändern (`/account`, für alle eingeloggten Nutzer)
+- Kontaktdaten (E-Mail, Telefon) pro Nutzer, selbstständig unter `/account` pflegbar,
+  in der Nutzerverwaltung für Admins sichtbar
 - Bulk-Zuweisung nach Ordner: `/admin/users/<id>/permissions` gruppiert Videos nach
   Ordner (z.B. Datumsordner der DJI-Clips) mit einer "alle in diesem Ordner"-Checkbox
 - Dunkles UI ohne Frameworks (reines CSS)
+
+## Was als Nächstes kommen könnte
+
+- Mailversand an zugewiesene Bearbeiter, wenn ein Kunde einen neuen Kommentar
+  schreibt (braucht SMTP-Anbindung, aktuell noch nicht umgesetzt)
 
 ## Projektstruktur
 

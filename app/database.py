@@ -86,3 +86,15 @@ def init_db() -> None:
             );
             """
         )
+        _migrate_add_columns(conn, "users", {"email": "TEXT", "phone": "TEXT"})
+
+
+def _migrate_add_columns(conn: sqlite3.Connection, table: str, columns: dict) -> None:
+    """Ergänzt fehlende Spalten in einer bestehenden Tabelle. SQLite kennt kein
+    ALTER TABLE ADD COLUMN IF NOT EXISTS, daher wird das über PRAGMA table_info
+    selbst geprüft - so bleibt eine schon laufende Datenbank (mit Bestandsdaten)
+    beim Deploy einer neuen Version kompatibel, ohne dass jemand manuell migrieren muss."""
+    existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    for column, sql_type in columns.items():
+        if column not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}")

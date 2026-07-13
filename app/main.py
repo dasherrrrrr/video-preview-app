@@ -9,7 +9,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .auth import NotAuthenticated, hash_password
 from .database import get_db, init_db
-from .routers import admin, auth_routes, comments, dashboard, markers, streaming
+from .routers import account, admin, auth_routes, comments, dashboard, markers, streaming
 
 BASE_DIR = Path(__file__).parent
 
@@ -30,6 +30,7 @@ app.include_router(admin.router)
 app.include_router(streaming.router)
 app.include_router(markers.router)
 app.include_router(comments.router)
+app.include_router(account.router)
 
 
 @app.exception_handler(NotAuthenticated)

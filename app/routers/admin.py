@@ -147,6 +147,10 @@ def _fetch_user_or_404(user_id: int):
     return target
 
 
+def _video_folder(filepath: str) -> str:
+    return filepath.rsplit("/", 1)[0] if "/" in filepath else "(Hauptverzeichnis)"
+
+
 @router.get("/users/{user_id}/permissions")
 def edit_permissions(user_id: int, request: Request, admin=Depends(require_admin)):
     target = _fetch_user_or_404(user_id)
@@ -160,13 +164,25 @@ def edit_permissions(user_id: int, request: Request, admin=Depends(require_admin
                 "SELECT video_id FROM permissions WHERE user_id = ?", (user_id,)
             ).fetchall()
         }
+
+    # Nach Ordner gruppieren (z.B. Datumsordner der DJI-Clips), damit Admins
+    # ganze Ordner auf einmal zuweisen können statt jedes Video einzeln.
+    groups = []
+    groups_by_folder = {}
+    for v in videos:
+        folder = _video_folder(v["filepath"])
+        if folder not in groups_by_folder:
+            groups_by_folder[folder] = {"folder": folder, "videos": []}
+            groups.append(groups_by_folder[folder])
+        groups_by_folder[folder]["videos"].append(v)
+
     return templates.TemplateResponse(
         "admin_permissions.html",
         {
             "request": request,
             "user": admin,
             "target": target,
-            "videos": videos,
+            "groups": groups,
             "assigned_ids": assigned_ids,
         },
     )
@@ -184,3 +200,19 @@ async def update_permissions(user_id: int, request: Request, admin=Depends(requi
             [(user_id, video_id) for video_id in video_ids],
         )
     return RedirectResponse(url=f"/admin/users/{user_id}/permissions", status_code=303)
+
+
+@router.get("/markers")
+def list_all_markers(request: Request, admin=Depends(require_admin)):
+    with get_db() as conn:
+        markers = conn.execute(
+            "SELECT m.id, m.timestamp_seconds, m.label, m.created_at, "
+            "u.username, v.id AS video_id, v.title AS video_title "
+            "FROM markers m "
+            "JOIN users u ON u.id = m.user_id "
+            "JOIN videos v ON v.id = m.video_id "
+            "ORDER BY v.filepath, u.username, m.timestamp_seconds"
+        ).fetchall()
+    return templates.TemplateResponse(
+        "admin_markers.html", {"request": request, "user": admin, "markers": markers}
+    )

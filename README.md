@@ -46,13 +46,11 @@ nicht in Git, server-spezifische Werte bleiben also bei jedem Pull unangetastet.
 - Marker setzen/anzeigen/löschen pro Nutzer und Video, mit Sprung-zu-Zeitpunkt im Player
 - Kommentare pro Video: sichtbar für alle Nutzer mit Zugriff (nicht privat wie Marker),
   für Status-Austausch zwischen Admin und Nutzern. Löschen: eigener Kommentar oder Admin
+- Admin-Übersicht über alle Marker aller Nutzer (`/admin/markers`)
+- Eigenes Passwort ändern (`/account`, für alle eingeloggten Nutzer)
+- Bulk-Zuweisung nach Ordner: `/admin/users/<id>/permissions` gruppiert Videos nach
+  Ordner (z.B. Datumsordner der DJI-Clips) mit einer "alle in diesem Ordner"-Checkbox
 - Dunkles UI ohne Frameworks (reines CSS)
-
-## Was als Nächstes kommen könnte
-
-- Admin-Übersicht über alle Marker aller Nutzer (aktuell nur pro Nutzer sichtbar)
-- Eigenes Passwort ändern (aktuell nur vom Admin über Nutzerverwaltung neu anlegbar)
-- Bulk-Zuweisung (z.B. ganze Ordner/Datumsordner statt einzelner Videos zuweisen)
 
 ## Projektstruktur
 

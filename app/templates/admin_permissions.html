@@ -4,18 +4,27 @@
 <h1>Videos zuweisen: {{ target["username"] }}</h1>
 <p class="muted"><a href="/admin/users">&larr; zurück zur Nutzerverwaltung</a></p>
 
-{% if videos %}
+{% if groups %}
 <form method="post" action="/admin/users/{{ target['id'] }}/permissions">
+    {% for group in groups %}
+    {% set group_index = loop.index %}
+    <h2>
+        <label class="checkbox-label folder-toggle">
+            <input type="checkbox" class="folder-select-all" data-folder="{{ group_index }}">
+            {{ group["folder"] }}
+        </label>
+    </h2>
     <table class="user-table">
         <thead>
             <tr><th></th><th>Titel</th><th>Pfad</th></tr>
         </thead>
         <tbody>
-            {% for v in videos %}
+            {% for v in group["videos"] %}
             <tr>
                 <td>
                     <input type="checkbox" name="video_ids" value="{{ v['id'] }}"
-                        {% if v["id"] in assigned_ids %}checked{% endif %}>
+                        {% if v["id"] in assigned_ids %}checked{% endif %}
+                        data-group="{{ group_index }}">
                 </td>
                 <td>{{ v["title"] }}</td>
                 <td class="mono">{{ v["filepath"] }}</td>
@@ -23,8 +32,27 @@
             {% endfor %}
         </tbody>
     </table>
+    {% endfor %}
     <button type="submit">Zuweisung speichern</button>
 </form>
+
+<script>
+    document.querySelectorAll(".folder-select-all").forEach((groupCheckbox) => {
+        const folder = groupCheckbox.dataset.folder;
+        const items = document.querySelectorAll('input[name="video_ids"][data-group="' + folder + '"]');
+
+        const syncGroupState = () => {
+            const allChecked = Array.from(items).every((i) => i.checked);
+            groupCheckbox.checked = allChecked;
+        };
+        syncGroupState();
+
+        groupCheckbox.addEventListener("change", () => {
+            items.forEach((i) => { i.checked = groupCheckbox.checked; });
+        });
+        items.forEach((i) => i.addEventListener("change", syncGroupState));
+    });
+</script>
 {% else %}
 <div class="empty-state">
     <p>Noch keine Videos im Katalog.</p>

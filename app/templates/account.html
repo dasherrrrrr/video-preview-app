@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Mein Konto{% endblock %}
+{% block content %}
+<h1>Mein Konto</h1>
+<p class="muted">Angemeldet als <strong>{{ user["username"] }}</strong></p>
+
+<h2>Passwort ändern</h2>
+
+{% if error %}
+<p class="alert">{{ error }}</p>
+{% endif %}
+{% if success %}
+<p class="alert alert-success">{{ success }}</p>
+{% endif %}
+
+<form class="card-form" method="post" action="/account/password">
+    <label>
+        Aktuelles Passwort
+        <input type="password" name="current_password" required>
+    </label>
+    <label>
+        Neues Passwort
+        <input type="password" name="new_password" minlength="8" required>
+    </label>
+    <label>
+        Neues Passwort bestätigen
+        <input type="password" name="new_password_confirm" minlength="8" required>
+    </label>
+    <button type="submit">Passwort ändern</button>
+</form>
+{% endblock %}

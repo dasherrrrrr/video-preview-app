@@ -1,0 +1,17 @@
+# Kopieren nach docker-compose.override.yml und Werte für den jeweiligen Server
+# anpassen. Diese Datei wird von Docker Compose automatisch zusätzlich zu
+# docker-compose.yml geladen und überschreibt dort die angegebenen Werte.
+# Sie ist bewusst NICHT in Git (siehe .gitignore) - so bleiben server-spezifische
+# Secrets und Pfade bei "git pull" unangetastet.
+
+services:
+  video-preview:
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./data:/app/data
+      - /mnt/user/dji:/videos:ro
+    environment:
+      - SESSION_SECRET=hier-den-echten-server-secret-eintragen
+      - VIDEOS_DIR=/videos
+      - PYTHONUNBUFFERED=1

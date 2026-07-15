@@ -5,8 +5,9 @@ Hash gespeichert - der Klartext wird nur einmal beim Erzeugen angezeigt."""
 
 import hashlib
 import secrets
+from typing import Optional
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Query, status
 
 from .auth import get_user_by_id
 from .database import get_db
@@ -20,18 +21,28 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def require_api_token(authorization: str | None = Header(default=None)):
-    """FastAPI-Dependency: erwartet 'Authorization: Bearer <token>'. Gibt bei
-    Erfolg denselben User-Row-Typ zurück wie require_login, damit bestehende
-    Helfer (get_authorized_video etc.) unverändert weiterverwendet werden
-    können."""
-    if not authorization or not authorization.startswith("Bearer "):
+def require_api_token(
+    authorization: Optional[str] = Header(default=None),
+    t: Optional[str] = Query(default=None),
+):
+    """FastAPI-Dependency: erwartet 'Authorization: Bearer <token>', mit
+    Fallback auf einen ?t=-Query-Parameter (Name passend zu Concordes
+    Implementierung). Der Fallback ist nötig, weil <video src>/<img src>-Tags
+    (Concorde bettet /api/stream und /api/thumbnail direkt so ein) keine
+    eigenen Header setzen können - für die JSON-Endpunkte sollte weiterhin
+    der Header verwendet werden (landet sonst in Logs/URLs)."""
+    raw_token = None
+    if authorization and authorization.startswith("Bearer "):
+        raw_token = authorization.removeprefix("Bearer ").strip()
+    elif t:
+        raw_token = t.strip()
+
+    if not raw_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Fehlender oder ungültiger Authorization-Header.",
+            detail="Fehlender oder ungültiger Authorization-Header bzw. t-Parameter.",
         )
-    token = authorization.removeprefix("Bearer ").strip()
-    token_hash = hash_token(token)
+    token_hash = hash_token(raw_token)
 
     with get_db() as conn:
         row = conn.execute(

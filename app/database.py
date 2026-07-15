@@ -92,6 +92,18 @@ def init_db() -> None:
                 key TEXT PRIMARY KEY,
                 value TEXT
             );
+
+            -- API-Tokens für externe Systeme (z.B. Lovable/Concorde), die Videos
+            -- ohne Session-Login abrufen wollen. Ein Token pro Nutzer, gespeichert
+            -- als Hash (wie Passwörter) - der Klartext wird nur einmal beim
+            -- Erzeugen angezeigt.
+            CREATE TABLE IF NOT EXISTS api_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                token_hash TEXT UNIQUE NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                last_used_at TEXT
+            );
             """
         )
         _migrate_add_columns(

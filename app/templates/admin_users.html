@@ -3,9 +3,16 @@
 {% block content %}
 <h1>Nutzerverwaltung</h1>
 
+{% if new_token %}
+<p class="alert alert-success">
+    Neuer API-Token (wird nur jetzt angezeigt, danach nicht mehr abrufbar):
+    <code class="mono">{{ new_token }}</code>
+</p>
+{% endif %}
+
 <table class="user-table">
     <thead>
-        <tr><th>Benutzername</th><th>Rolle</th><th>E-Mail</th><th>Telefon</th><th>Bearbeiter</th><th>Angelegt</th><th></th></tr>
+        <tr><th>Benutzername</th><th>Rolle</th><th>E-Mail</th><th>Telefon</th><th>Bearbeiter</th><th>Angelegt</th><th>API-Token</th><th></th></tr>
     </thead>
     <tbody>
         {% for u in users %}
@@ -29,6 +36,19 @@
                 {% endif %}
             </td>
             <td class="mono">{{ u["created_at"] }}</td>
+            <td>
+                {% if u["api_token_created_at"] %}
+                <span class="mono">aktiv seit {{ u["api_token_created_at"] }}</span>
+                <form method="post" action="/admin/users/{{ u['id'] }}/api-token/revoke">
+                    <button type="submit">Widerrufen</button>
+                </form>
+                {% else %}
+                <span class="mono">kein Token</span>
+                {% endif %}
+                <form method="post" action="/admin/users/{{ u['id'] }}/api-token">
+                    <button type="submit">{% if u["api_token_created_at"] %}Neu erzeugen{% else %}Erzeugen{% endif %}</button>
+                </form>
+            </td>
             <td><a href="/admin/users/{{ u['id'] }}/permissions">Videos zuweisen</a></td>
         </tr>
         {% endfor %}

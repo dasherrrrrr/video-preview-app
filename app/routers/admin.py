@@ -5,6 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import RedirectResponse
 
+from ..api_auth import generate_api_token, hash_token
 from ..auth import hash_password, require_admin
 from ..catalog import scan_library
 from ..database import get_db
@@ -21,8 +22,10 @@ def _fetch_users():
     with get_db() as conn:
         return conn.execute(
             "SELECT u.id, u.username, u.is_admin, u.email, u.phone, u.created_at, "
-            "u.assigned_editor_id, e.username AS editor_username "
+            "u.assigned_editor_id, e.username AS editor_username, "
+            "t.created_at AS api_token_created_at "
             "FROM users u LEFT JOIN users e ON e.id = u.assigned_editor_id "
+            "LEFT JOIN api_tokens t ON t.user_id = u.id "
             "ORDER BY u.id"
         ).fetchall()
 
@@ -36,7 +39,7 @@ def _fetch_editors():
 
 
 @router.get("/users")
-def list_users(request: Request, admin=Depends(require_admin)):
+def list_users(request: Request, admin=Depends(require_admin), new_token: Optional[str] = None):
     return templates.TemplateResponse(
         "admin_users.html",
         {
@@ -45,6 +48,7 @@ def list_users(request: Request, admin=Depends(require_admin)):
             "users": _fetch_users(),
             "editors": _fetch_editors(),
             "error": None,
+            "new_token": new_token,
         },
     )
 
@@ -180,6 +184,27 @@ def assign_editor(user_id: int, editor_id: str = Form(""), admin=Depends(require
             "UPDATE users SET assigned_editor_id = ? WHERE id = ?",
             (editor_id_int, user_id),
         )
+    return RedirectResponse(url="/admin/users", status_code=303)
+
+
+@router.post("/users/{user_id}/api-token")
+def create_api_token(user_id: int, admin=Depends(require_admin)):
+    _fetch_user_or_404(user_id)
+    token = generate_api_token()
+    with get_db() as conn:
+        conn.execute("DELETE FROM api_tokens WHERE user_id = ?", (user_id,))
+        conn.execute(
+            "INSERT INTO api_tokens (user_id, token_hash) VALUES (?, ?)",
+            (user_id, hash_token(token)),
+        )
+    return RedirectResponse(url=f"/admin/users?new_token={token}", status_code=303)
+
+
+@router.post("/users/{user_id}/api-token/revoke")
+def revoke_api_token(user_id: int, admin=Depends(require_admin)):
+    _fetch_user_or_404(user_id)
+    with get_db() as conn:
+        conn.execute("DELETE FROM api_tokens WHERE user_id = ?", (user_id,))
     return RedirectResponse(url="/admin/users", status_code=303)
 
 

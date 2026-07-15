@@ -12,6 +12,7 @@ from .database import get_db, init_db
 from .routers import (
     account,
     admin,
+    api,
     auth_routes,
     branding,
     comments,
@@ -43,6 +44,7 @@ app.include_router(comments.router)
 app.include_router(account.router)
 app.include_router(settings.router)
 app.include_router(branding.router)
+app.include_router(api.router)
 
 
 @app.exception_handler(NotAuthenticated)

@@ -61,7 +61,10 @@ def send_email(to_address: str, subject: str, body: str) -> tuple[bool, str]:
 
 
 def video_watch_url(video_id: int) -> str:
+    """Link im Mail-Hinweis an den Bearbeiter - führt zur Admin-Ansicht des
+    Videos, da Kunden seit der Concorde-Anbindung nicht mehr direkt in dieser
+    App einloggen und es daher keine Kunden-Watch-Seite mehr gibt."""
     base = get_setting("app_base_url", "APP_BASE_URL").rstrip("/")
     if base:
-        return f"{base}/watch/{video_id}"
-    return f"/watch/{video_id}"
+        return f"{base}/admin/videos/{video_id}"
+    return f"/admin/videos/{video_id}"

@@ -9,6 +9,7 @@ from ..api_auth import generate_api_token, hash_token
 from ..auth import hash_password, require_admin
 from ..catalog import scan_library
 from ..database import get_db
+from ..media import get_authorized_video
 from ..templates_env import templates
 from ..thumbnails import set_custom_thumbnail
 
@@ -261,6 +262,57 @@ async def update_permissions(user_id: int, request: Request, admin=Depends(requi
             [(user_id, video_id) for video_id in video_ids],
         )
     return RedirectResponse(url=f"/admin/users/{user_id}/permissions", status_code=303)
+
+
+@router.get("/videos/{video_id}")
+def video_detail(video_id: int, request: Request, admin=Depends(require_admin)):
+    video = get_authorized_video(video_id, admin)
+    with get_db() as conn:
+        markers = conn.execute(
+            "SELECT m.timestamp_seconds, m.label, u.username "
+            "FROM markers m JOIN users u ON u.id = m.user_id "
+            "WHERE m.video_id = ? ORDER BY m.timestamp_seconds",
+            (video_id,),
+        ).fetchall()
+        comments = conn.execute(
+            "SELECT c.id, c.body, c.created_at, u.username "
+            "FROM comments c JOIN users u ON u.id = c.user_id "
+            "WHERE c.video_id = ? ORDER BY c.created_at",
+            (video_id,),
+        ).fetchall()
+    return templates.TemplateResponse(
+        "admin_video_detail.html",
+        {
+            "request": request,
+            "user": admin,
+            "video": video,
+            "markers": markers,
+            "comments": comments,
+        },
+    )
+
+
+@router.post("/videos/{video_id}/comments")
+def admin_reply(video_id: int, body: str = Form(...), admin=Depends(require_admin)):
+    get_authorized_video(video_id, admin)
+    body = body.strip()
+    if not body:
+        raise HTTPException(status_code=400, detail="Kommentar darf nicht leer sein.")
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO comments (user_id, video_id, body) VALUES (?, ?, ?)",
+            (admin["id"], video_id, body),
+        )
+    return RedirectResponse(url=f"/admin/videos/{video_id}", status_code=303)
+
+
+@router.post("/videos/{video_id}/comments/{comment_id}/delete")
+def admin_delete_comment(video_id: int, comment_id: int, admin=Depends(require_admin)):
+    with get_db() as conn:
+        conn.execute(
+            "DELETE FROM comments WHERE id = ? AND video_id = ?", (comment_id, video_id)
+        )
+    return RedirectResponse(url=f"/admin/videos/{video_id}", status_code=303)
 
 
 @router.get("/markers")

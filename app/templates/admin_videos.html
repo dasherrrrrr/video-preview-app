@@ -13,7 +13,7 @@
 
 <table class="user-table">
     <thead>
-        <tr><th></th><th>Titel</th><th>Pfad</th><th>Dauer</th><th>Codec</th><th>Hinzugefügt</th><th></th><th></th></tr>
+        <tr><th></th><th>Titel</th><th>Pfad</th><th>Dauer</th><th>Codec</th><th>Hinzugefügt</th><th></th><th></th><th></th></tr>
     </thead>
     <tbody>
         {% for v in videos %}
@@ -43,10 +43,11 @@
                     <button type="submit">Thumbnail hochladen</button>
                 </form>
             </td>
+            <td><a href="/admin/videos/{{ v['id'] }}">Kommentare</a></td>
         </tr>
         {% endfor %}
         {% if not videos %}
-        <tr><td colspan="8">Noch keine Videos im Katalog. Verzeichnis einlesen, um loszulegen.</td></tr>
+        <tr><td colspan="9">Noch keine Videos im Katalog. Verzeichnis einlesen, um loszulegen.</td></tr>
         {% endif %}
     </tbody>
 </table>

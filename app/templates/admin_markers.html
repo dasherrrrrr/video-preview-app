@@ -10,7 +10,7 @@
     <tbody>
         {% for m in markers %}
         <tr>
-            <td><a href="/watch/{{ m['video_id'] }}">{{ m["video_title"] }}</a></td>
+            <td><a href="/admin/videos/{{ m['video_id'] }}">{{ m["video_title"] }}</a></td>
             <td>{{ m["username"] }}</td>
             <td class="mono">{{ (m["timestamp_seconds"] // 60) | int }}:{{ "%02d" | format(m["timestamp_seconds"] % 60) }}</td>
             <td>{{ m["label"] }}</td>

@@ -3,6 +3,7 @@ import secrets
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
@@ -15,9 +16,6 @@ from .routers import (
     api,
     auth_routes,
     branding,
-    comments,
-    dashboard,
-    markers,
     settings,
     streaming,
 )
@@ -33,14 +31,23 @@ app = FastAPI(title="Video Preview App")
 SECRET_KEY = os.environ.get("SESSION_SECRET", secrets.token_urlsafe(32))
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
+# Erlaubt Concorde/Lovable (fremdes Origin), die Token-API in /api per fetch()
+# aus dem Browser anzusprechen - inkl. Preflight-Requests für POST/DELETE.
+# Wildcard ist hier unbedenklich, da die eigentliche Auth über den vom Nutzer
+# mitgesendeten Bearer-Token läuft, nicht über Cookies (allow_credentials=False).
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 app.include_router(auth_routes.router)
-app.include_router(dashboard.router)
 app.include_router(admin.router)
 app.include_router(streaming.router)
-app.include_router(markers.router)
-app.include_router(comments.router)
 app.include_router(account.router)
 app.include_router(settings.router)
 app.include_router(branding.router)

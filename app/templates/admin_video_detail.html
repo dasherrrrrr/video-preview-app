@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ video["title"] }}{% endblock %}
 {% block content %}
-<p class="muted"><a href="/">&larr; zurück zur Übersicht</a></p>
+<p class="muted"><a href="/admin/videos">&larr; zurück zum Katalog</a></p>
 <h1>{{ video["title"] }}</h1>
 
 <video id="player" class="video-player" controls preload="metadata">
@@ -18,15 +18,7 @@
 {% endif %}
 
 <h2>Marker</h2>
-<p class="muted">Jeder Marker braucht eine Beschreibung: was soll sich der Kunde an dieser
-    Stelle anders vorstellt, oder was findet er gut?</p>
-
-<form id="marker-form" class="marker-form" method="post" action="/watch/{{ video['id'] }}/markers">
-    <input type="hidden" id="marker-timestamp" name="timestamp_seconds" value="0">
-    <input type="text" name="label" placeholder="z.B. Übergang hier zu abrupt, oder: Farbstimmung gefällt gut" maxlength="500" required>
-    <button type="submit">Marker bei aktueller Position setzen</button>
-</form>
-
+<p class="muted">Von Kunden in Concorde gesetzt - hier nur zur Ansicht.</p>
 {% if markers %}
 <ul class="marker-list">
     {% for m in markers %}
@@ -35,9 +27,7 @@
             {{ (m["timestamp_seconds"] // 60) | int }}:{{ "%02d" | format(m["timestamp_seconds"] % 60) }}
         </button>
         <span>{{ m["label"] }}</span>
-        <form method="post" action="/watch/{{ video['id'] }}/markers/{{ m['id'] }}/delete">
-            <button type="submit" class="marker-delete">Löschen</button>
-        </form>
+        <span class="mono">({{ m["username"] }})</span>
     </li>
     {% endfor %}
 </ul>
@@ -46,10 +36,10 @@
 {% endif %}
 
 <h2>Kommentare</h2>
-<p class="muted">Sichtbar für alle, die Zugriff auf dieses Video haben - z.B. für Status-Rückmeldungen.</p>
+<p class="muted">Kunden kommentieren über Concorde - hier antworten und den Verlauf einsehen.</p>
 
-<form class="comment-form" method="post" action="/watch/{{ video['id'] }}/comments">
-    <textarea name="body" rows="3" placeholder="Kommentar schreiben..." maxlength="2000" required></textarea>
+<form class="comment-form" method="post" action="/admin/videos/{{ video['id'] }}/comments">
+    <textarea name="body" rows="3" placeholder="Antwort schreiben..." maxlength="2000" required></textarea>
     <button type="submit">Kommentieren</button>
 </form>
 
@@ -62,11 +52,9 @@
             <span class="mono">{{ c["created_at"] }}</span>
         </div>
         <p class="comment-body">{{ c["body"] }}</p>
-        {% if c["user_id"] == user["id"] or user["is_admin"] %}
-        <form method="post" action="/watch/{{ video['id'] }}/comments/{{ c['id'] }}/delete">
+        <form method="post" action="/admin/videos/{{ video['id'] }}/comments/{{ c['id'] }}/delete">
             <button type="submit" class="marker-delete">Löschen</button>
         </form>
-        {% endif %}
     </li>
     {% endfor %}
 </ul>
@@ -76,9 +64,6 @@
 
 <script>
     const player = document.getElementById("player");
-    document.getElementById("marker-form").addEventListener("submit", () => {
-        document.getElementById("marker-timestamp").value = player.currentTime;
-    });
     document.querySelectorAll(".marker-jump").forEach((btn) => {
         btn.addEventListener("click", () => {
             player.currentTime = parseFloat(btn.dataset.seconds);

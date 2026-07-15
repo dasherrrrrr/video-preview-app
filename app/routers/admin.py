@@ -5,9 +5,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import RedirectResponse
 
-from ..api_auth import generate_api_token, hash_token
 from ..auth import hash_password, require_admin
 from ..catalog import scan_library
+from ..customers import generate_token_for_user, revoke_token_for_user, set_permissions
 from ..database import get_db
 from ..media import get_authorized_video
 from ..templates_env import templates
@@ -191,21 +191,14 @@ def assign_editor(user_id: int, editor_id: str = Form(""), admin=Depends(require
 @router.post("/users/{user_id}/api-token")
 def create_api_token(user_id: int, admin=Depends(require_admin)):
     _fetch_user_or_404(user_id)
-    token = generate_api_token()
-    with get_db() as conn:
-        conn.execute("DELETE FROM api_tokens WHERE user_id = ?", (user_id,))
-        conn.execute(
-            "INSERT INTO api_tokens (user_id, token_hash) VALUES (?, ?)",
-            (user_id, hash_token(token)),
-        )
+    token = generate_token_for_user(user_id)
     return RedirectResponse(url=f"/admin/users?new_token={token}", status_code=303)
 
 
 @router.post("/users/{user_id}/api-token/revoke")
 def revoke_api_token(user_id: int, admin=Depends(require_admin)):
     _fetch_user_or_404(user_id)
-    with get_db() as conn:
-        conn.execute("DELETE FROM api_tokens WHERE user_id = ?", (user_id,))
+    revoke_token_for_user(user_id)
     return RedirectResponse(url="/admin/users", status_code=303)
 
 
@@ -255,12 +248,7 @@ async def update_permissions(user_id: int, request: Request, admin=Depends(requi
     _fetch_user_or_404(user_id)
     form = await request.form()
     video_ids = [int(v) for v in form.getlist("video_ids")]
-    with get_db() as conn:
-        conn.execute("DELETE FROM permissions WHERE user_id = ?", (user_id,))
-        conn.executemany(
-            "INSERT INTO permissions (user_id, video_id) VALUES (?, ?)",
-            [(user_id, video_id) for video_id in video_ids],
-        )
+    set_permissions(user_id, video_ids)
     return RedirectResponse(url=f"/admin/users/{user_id}/permissions", status_code=303)
 
 

@@ -6,7 +6,7 @@ Hash gespeichert - der Klartext wird nur einmal beim Erzeugen angezeigt."""
 import hashlib
 import secrets
 
-from fastapi import Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 
 from .auth import get_user_by_id
 from .database import get_db
@@ -47,4 +47,13 @@ def require_api_token(authorization: str | None = Header(default=None)):
     user = get_user_by_id(row["user_id"])
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nutzer zu diesem Token existiert nicht mehr.")
+    return user
+
+
+def require_api_admin(user=Depends(require_api_token)):
+    """Wie require_api_token, aber nur für Admin-Tokens - für die
+    Management-Endpunkte (/api/admin/*), über die z.B. Concorde Kunden anlegen
+    und Videos zuweisen kann."""
+    if not user["is_admin"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Nur für Admin-Tokens.")
     return user

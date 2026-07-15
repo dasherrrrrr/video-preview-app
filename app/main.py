@@ -14,6 +14,7 @@ from .routers import (
     account,
     admin,
     api,
+    api_admin,
     auth_routes,
     branding,
     settings,
@@ -52,6 +53,7 @@ app.include_router(account.router)
 app.include_router(settings.router)
 app.include_router(branding.router)
 app.include_router(api.router)
+app.include_router(api_admin.router)
 
 
 @app.exception_handler(NotAuthenticated)

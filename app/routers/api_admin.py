@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from ..api_auth import require_api_admin
+from ..catalog import scan_library
 from ..customers import create_customer, generate_token_for_user, revoke_token_for_user, set_permissions
 from ..database import get_db
 
@@ -94,3 +95,14 @@ def assign_videos(user_id: int, payload: VideoAssignment, admin=Depends(require_
     _fetch_customer_or_404(user_id)
     set_permissions(user_id, payload.video_ids)
     return {"video_ids": payload.video_ids}
+
+
+@router.post("/scan")
+def scan_catalog(admin=Depends(require_api_admin)):
+    """Liest das Videoverzeichnis neu ein (neue Dateien aufnehmen, gelöschte
+    entfernen) und transkodiert neue Videos direkt vor. Kann bei vielen neuen
+    Videos länger dauern (jedes wird einmal komplett transkodiert) - der
+    Request läuft so lange synchron, ein Reverse-Proxy mit kurzem Timeout
+    könnte die Verbindung vorher kappen. Der Scan läuft serverseitig aber
+    trotzdem zu Ende, auch wenn der Concorde-Request währenddessen abbricht."""
+    return scan_library()

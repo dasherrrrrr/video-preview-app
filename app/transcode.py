@@ -48,11 +48,13 @@ def ensure_transcoded(video_id: int, source_path: Path) -> Path:
         "-vaapi_device", VAAPI_DEVICE,
         "-hwaccel_output_format", "vaapi",
         "-i", str(source_path),
-        # DJI-Drohnenclips liegen teils als 10-Bit HEVC (Main10/P010) vor -
-        # h264_vaapi kann aber nur 8-Bit NV12 encodieren ("No usable encoding
-        # profile found" sonst). scale_vaapi konvertiert das auf der GPU,
-        # ist für bereits-8-Bit-Quellen ein No-Op.
-        "-vf", "scale_vaapi=format=nv12",
+        # Runterskalieren auf 720p (Breite automatisch, gerade Zahl via -2) -
+        # für eine Vorschau reicht das, transkodiert spürbar schneller und
+        # ergibt kleinere Dateien als die Kamera-Originalauflösung (meist 4K).
+        # format=nv12 löst nebenbei auch 10-Bit-HEVC-Quellen (DJI Main10/P010)
+        # auf 8-Bit auf - h264_vaapi kann sonst nur 8-Bit encodieren ("No
+        # usable encoding profile found").
+        "-vf", "scale_vaapi=w=-2:h=720:format=nv12",
         "-c:v", "h264_vaapi",
         "-qp", "24",  # konstante Qualität statt unbegrenzter Bitrate (sonst oft größer als Quelle)
         "-c:a", "aac",

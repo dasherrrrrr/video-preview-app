@@ -109,7 +109,12 @@ def list_videos(request: Request, admin=Depends(require_admin), scan_result: Opt
 @router.post("/videos/scan")
 def scan_videos(admin=Depends(require_admin)):
     result = scan_library()
-    summary = f"{result['added']} neu, {result['removed']} entfernt, {result['unchanged']} unverändert"
+    summary = (
+        f"{result['added']} neu, {result['removed']} entfernt, {result['unchanged']} unverändert, "
+        f"{result['transcoded']} vortranskodiert"
+    )
+    if result["transcode_failed"]:
+        summary += f", {result['transcode_failed']} Transcode fehlgeschlagen"
     return RedirectResponse(url=f"/admin/videos?scan_result={summary}", status_code=303)
 
 

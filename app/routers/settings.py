@@ -20,6 +20,7 @@ SETTINGS_FIELDS = [
     ("smtp_use_ssl", "SMTP_USE_SSL"),
     ("app_base_url", "APP_BASE_URL"),
     ("site_title", ""),
+    ("download_bandwidth_kbps", "DOWNLOAD_BANDWIDTH_KBPS"),
 ]
 
 
@@ -61,6 +62,7 @@ def save_settings(
     smtp_use_ssl: str = Form(""),  # Checkbox: "on" wenn angehakt, sonst gar nicht
     app_base_url: str = Form(""),
     site_title: str = Form(""),
+    download_bandwidth_kbps: str = Form(""),
     admin=Depends(require_admin),
 ):
     set_setting("smtp_host", smtp_host.strip())
@@ -70,6 +72,7 @@ def save_settings(
     set_setting("smtp_use_ssl", "true" if smtp_use_ssl == "on" else "false")
     set_setting("app_base_url", app_base_url.strip())
     set_setting("site_title", site_title.strip())
+    set_setting("download_bandwidth_kbps", download_bandwidth_kbps.strip())
     # Passwort nur überschreiben, wenn tatsächlich etwas eingegeben wurde -
     # leeres Feld beim Speichern soll das bestehende Passwort nicht löschen.
     if smtp_password:

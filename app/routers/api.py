@@ -3,6 +3,8 @@ Projekt "Concorde Manager"), die Videos ohne Session-Login dieser App
 abspielen bzw. anzeigen wollen. Auth über Authorization: Bearer <token>
 statt Cookie (siehe api_auth.require_api_token)."""
 
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -11,7 +13,7 @@ from ..api_auth import require_api_token
 from ..catalog import VIDEOS_DIR
 from ..database import get_db
 from ..mailer import send_email, video_watch_url
-from ..media import build_stream_response, get_authorized_video
+from ..media import build_download_response, build_stream_response, get_authorized_video
 from ..thumbnails import get_thumbnail_path
 from ..transcode import ensure_transcoded, needs_transcode
 
@@ -61,6 +63,7 @@ def _video_to_dict(video) -> dict:
         "duration_seconds": video["duration_seconds"],
         "thumbnail_url": f"/api/thumbnail/{video['id']}",
         "stream_url": f"/api/stream/{video['id']}",
+        "download_url": f"/api/download/{video['id']}",
     }
 
 
@@ -126,6 +129,17 @@ def api_stream_video(video_id: int, request: Request, user=Depends(require_api_t
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return build_stream_response(filepath, request.headers.get("range"))
+
+
+@router.get("/download/{video_id}")
+def api_download_video(video_id: int, user=Depends(require_api_token)):
+    """Download des Original-Videos in voller Qualität (nicht die 720p-
+    Vorschauversion) - Bandbreite optional über /admin/settings gedrosselt."""
+    video = get_authorized_video(video_id, user)
+    filepath = VIDEOS_DIR / video["filepath"]
+    if not filepath.is_file():
+        raise HTTPException(status_code=404, detail="Datei nicht (mehr) vorhanden.")
+    return build_download_response(filepath, Path(video["filepath"]).name)
 
 
 @router.post("/videos/{video_id}/markers")

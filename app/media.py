@@ -1,7 +1,9 @@
 """Gemeinsame Berechtigungsprüfung und Range-Streaming-Logik für Player-Seite,
 Session-Streaming-Endpoint und Token-basierten API-Endpoint."""
 
+import mimetypes
 import re
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -9,8 +11,10 @@ from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 
 from .database import get_db
+from .settings import get_setting
 
 CHUNK_SIZE = 1024 * 1024  # 1 MB pro gelesenem Block
+DOWNLOAD_CHUNK_SIZE = 64 * 1024  # kleiner für feinere Bandbreiten-Drosselung
 RANGE_RE = re.compile(r"bytes=(\d+)-(\d*)")
 
 
@@ -74,3 +78,39 @@ def build_stream_response(
     return StreamingResponse(
         iterfile(), status_code=status_code, headers=headers, media_type="video/mp4"
     )
+
+
+def build_download_response(filepath: Path, filename: str) -> StreamingResponse:
+    """Baut eine Download-Response (Content-Disposition: attachment) für das
+    Original in voller Qualität - mit optionaler Bandbreiten-Drosselung aus
+    den Admin-Einstellungen (/admin/settings), damit ein einzelner Download
+    nicht die ganze Upload-Leitung des Servers sättigt. Kein Range-Support -
+    ein unterbrochener Download muss von vorn beginnen, das ist hier ok."""
+    file_size = filepath.stat().st_size
+    media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    safe_filename = filename.replace('"', "")
+
+    raw_limit = get_setting("download_bandwidth_kbps", "").strip()
+    bytes_per_sec = int(raw_limit) * 1024 if raw_limit.isdigit() and int(raw_limit) > 0 else None
+
+    def iterfile():
+        with open(filepath, "rb") as f:
+            start = time.monotonic()
+            sent = 0
+            while True:
+                chunk = f.read(DOWNLOAD_CHUNK_SIZE)
+                if not chunk:
+                    break
+                sent += len(chunk)
+                yield chunk
+                if bytes_per_sec:
+                    expected = sent / bytes_per_sec
+                    elapsed = time.monotonic() - start
+                    if expected > elapsed:
+                        time.sleep(expected - elapsed)
+
+    headers = {
+        "Content-Length": str(file_size),
+        "Content-Disposition": f'attachment; filename="{safe_filename}"',
+    }
+    return StreamingResponse(iterfile(), media_type=media_type, headers=headers)

@@ -25,6 +25,7 @@
     <input type="hidden" name="smtp_from" value="{{ settings['smtp_from'] }}">
     <input type="hidden" name="smtp_use_ssl" value="{{ 'on' if settings['smtp_use_ssl'] == 'true' else '' }}">
     <input type="hidden" name="app_base_url" value="{{ settings['app_base_url'] }}">
+    <input type="hidden" name="download_bandwidth_kbps" value="{{ settings['download_bandwidth_kbps'] }}">
     <button type="submit">Namen speichern</button>
 </form>
 
@@ -98,7 +99,31 @@
         <input type="text" name="app_base_url" value="{{ settings['app_base_url'] }}" placeholder="http://192.168.178.250:8001">
     </label>
     <input type="hidden" name="site_title" value="{{ settings['site_title'] }}">
+    <input type="hidden" name="download_bandwidth_kbps" value="{{ settings['download_bandwidth_kbps'] }}">
     <button type="submit">Einstellungen speichern</button>
+</form>
+
+<h2>Downloads</h2>
+<p class="muted">
+    Kunden können Videos in Originalqualität herunterladen (nicht die
+    720p-Vorschauversion). Um zu verhindern, dass ein einzelner Download die
+    gesamte Upload-Leitung des Servers sättigt, kann die Geschwindigkeit hier
+    gedrosselt werden. Leer lassen für unbegrenzte Geschwindigkeit.
+</p>
+<form class="card-form" method="post" action="/admin/settings">
+    <label>
+        Max. Download-Bandbreite (KB/s)
+        <input type="number" name="download_bandwidth_kbps" min="1" step="1"
+            value="{{ settings['download_bandwidth_kbps'] }}" placeholder="unbegrenzt">
+    </label>
+    <input type="hidden" name="smtp_host" value="{{ settings['smtp_host'] }}">
+    <input type="hidden" name="smtp_port" value="{{ settings['smtp_port'] or '587' }}">
+    <input type="hidden" name="smtp_username" value="{{ settings['smtp_username'] }}">
+    <input type="hidden" name="smtp_from" value="{{ settings['smtp_from'] }}">
+    <input type="hidden" name="smtp_use_ssl" value="{{ 'on' if settings['smtp_use_ssl'] == 'true' else '' }}">
+    <input type="hidden" name="app_base_url" value="{{ settings['app_base_url'] }}">
+    <input type="hidden" name="site_title" value="{{ settings['site_title'] }}">
+    <button type="submit">Bandbreite speichern</button>
 </form>
 
 <h2>Test-Mail senden</h2>

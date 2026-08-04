@@ -90,8 +90,14 @@ def build_download_response(filepath: Path, filename: str) -> StreamingResponse:
     media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
     safe_filename = filename.replace('"', "")
 
-    raw_limit = get_setting("download_bandwidth_kbps", "").strip()
-    bytes_per_sec = int(raw_limit) * 1024 if raw_limit.isdigit() and int(raw_limit) > 0 else None
+    raw_limit = get_setting("download_bandwidth_mbps", "").strip().replace(",", ".")
+    bytes_per_sec = None
+    try:
+        mbps = float(raw_limit)
+        if mbps > 0:
+            bytes_per_sec = int(mbps * 1_000_000 / 8)  # Mbit/s -> Byte/s
+    except ValueError:
+        pass
 
     def iterfile():
         with open(filepath, "rb") as f:

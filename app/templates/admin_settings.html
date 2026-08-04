@@ -25,7 +25,7 @@
     <input type="hidden" name="smtp_from" value="{{ settings['smtp_from'] }}">
     <input type="hidden" name="smtp_use_ssl" value="{{ 'on' if settings['smtp_use_ssl'] == 'true' else '' }}">
     <input type="hidden" name="app_base_url" value="{{ settings['app_base_url'] }}">
-    <input type="hidden" name="download_bandwidth_kbps" value="{{ settings['download_bandwidth_kbps'] }}">
+    <input type="hidden" name="download_bandwidth_mbps" value="{{ settings['download_bandwidth_mbps'] }}">
     <button type="submit">Namen speichern</button>
 </form>
 
@@ -99,7 +99,7 @@
         <input type="text" name="app_base_url" value="{{ settings['app_base_url'] }}" placeholder="http://192.168.178.250:8001">
     </label>
     <input type="hidden" name="site_title" value="{{ settings['site_title'] }}">
-    <input type="hidden" name="download_bandwidth_kbps" value="{{ settings['download_bandwidth_kbps'] }}">
+    <input type="hidden" name="download_bandwidth_mbps" value="{{ settings['download_bandwidth_mbps'] }}">
     <button type="submit">Einstellungen speichern</button>
 </form>
 
@@ -112,9 +112,9 @@
 </p>
 <form class="card-form" method="post" action="/admin/settings">
     <label>
-        Max. Download-Bandbreite (KB/s)
-        <input type="number" name="download_bandwidth_kbps" min="1" step="1"
-            value="{{ settings['download_bandwidth_kbps'] }}" placeholder="unbegrenzt">
+        Max. Download-Bandbreite (Mbit/s)
+        <input type="number" name="download_bandwidth_mbps" min="0.1" step="0.1"
+            value="{{ settings['download_bandwidth_mbps'] }}" placeholder="unbegrenzt">
     </label>
     <input type="hidden" name="smtp_host" value="{{ settings['smtp_host'] }}">
     <input type="hidden" name="smtp_port" value="{{ settings['smtp_port'] or '587' }}">

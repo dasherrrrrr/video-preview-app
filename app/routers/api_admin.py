@@ -8,7 +8,7 @@ import os
 import urllib.error
 import urllib.request
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from ..api_auth import require_api_admin
@@ -114,7 +114,12 @@ def scan_catalog(admin=Depends(require_api_admin)):
 
 
 @router.post("/incidents")
-def report_incident(payload: dict, source: str = Query(...), admin=Depends(require_api_admin)):
+def report_incident(
+    payload: dict,
+    source: str | None = Query(default=None),
+    x_incident_source: str | None = Header(default=None),
+    admin=Depends(require_api_admin),
+):
     """Nimmt Alarme von externen Monitoring-Quellen (Unraid Apprise-Agent,
     TrueNAS Alert-Service) entgegen und reicht sie als IT-Vorfall an Concorde
     weiter. Bewusst hier angesiedelt statt direkt in Concorde, weil Concorde
@@ -123,7 +128,15 @@ def report_incident(payload: dict, source: str = Query(...), admin=Depends(requi
 
     Akzeptiert sowohl Apprise-JSON ({"title", "message", "type"}) als auch
     Slack-kompatible Payloads ({"text": "..."}), wie sie z.B. TrueNAs'
-    eingebauter "Slack"-Alert-Service verschickt."""
+    eingebauter "Slack"-Alert-Service verschickt.
+
+    "source" kommt wahlweise als Query-Parameter oder als X-Incident-Source-
+    Header - Apprises JSON-Webhook (apprise-go) reicht bei diesem Server
+    keine Query-Parameter durch, nur Header, andere Absender (curl, TrueNAS)
+    können weiterhin einfach den Query-Parameter nutzen."""
+    source = source or x_incident_source
+    if not source:
+        raise HTTPException(status_code=400, detail="source fehlt (Query-Parameter oder X-Incident-Source-Header).")
     supabase_url = os.environ.get("SUPABASE_URL", "")
     supabase_key = os.environ.get("SUPABASE_ANON_KEY", "")
     incident_token = os.environ.get("INCIDENT_INGEST_TOKEN", "")

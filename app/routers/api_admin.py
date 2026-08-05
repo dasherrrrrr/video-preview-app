@@ -8,7 +8,7 @@ import os
 import urllib.error
 import urllib.request
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from ..api_auth import require_api_admin
@@ -114,7 +114,7 @@ def scan_catalog(admin=Depends(require_api_admin)):
 
 
 @router.post("/incidents")
-def report_incident(payload: dict, source: str, admin=Depends(require_api_admin)):
+def report_incident(payload: dict, source: str = Query(...), admin=Depends(require_api_admin)):
     """Nimmt Alarme von externen Monitoring-Quellen (Unraid Apprise-Agent,
     TrueNAS Alert-Service) entgegen und reicht sie als IT-Vorfall an Concorde
     weiter. Bewusst hier angesiedelt statt direkt in Concorde, weil Concorde

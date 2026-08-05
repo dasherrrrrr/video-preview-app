@@ -13,8 +13,9 @@ from pydantic import BaseModel
 
 from ..api_auth import require_api_admin
 from ..catalog import scan_library
-from ..customers import create_customer, generate_token_for_user, revoke_token_for_user, set_permissions
+from ..customers import create_customer, generate_token_for_user, revoke_token_for_user, set_permissions, set_upload_folder
 from ..database import get_db
+from ..uploads import get_quota_usage
 
 router = APIRouter(prefix="/api/admin")
 
@@ -29,10 +30,14 @@ class VideoAssignment(BaseModel):
     video_ids: list[int]
 
 
+class UploadFolderUpdate(BaseModel):
+    upload_folder: str | None = None
+
+
 def _fetch_customer_or_404(user_id: int):
     with get_db() as conn:
         row = conn.execute(
-            "SELECT id, username, email, phone FROM users WHERE id = ? AND is_admin = 0",
+            "SELECT id, username, email, phone, upload_folder FROM users WHERE id = ? AND is_admin = 0",
             (user_id,),
         ).fetchone()
     if not row:
@@ -100,6 +105,27 @@ def assign_videos(user_id: int, payload: VideoAssignment, admin=Depends(require_
     _fetch_customer_or_404(user_id)
     set_permissions(user_id, payload.video_ids)
     return {"video_ids": payload.video_ids}
+
+
+@router.put("/customers/{user_id}/upload-folder")
+def update_customer_upload_folder(user_id: int, payload: UploadFolderUpdate, admin=Depends(require_api_admin)):
+    """Legt fest, in welchem Ordner (relativ zum Videoverzeichnis, z.B. die
+    schon für die Videozuweisung genutzte Ordner-ID) dieser Kunde per
+    /api/upload Dateien hochladen darf. upload_folder=null deaktiviert den
+    Upload für diesen Kunden wieder."""
+    _fetch_customer_or_404(user_id)
+    set_upload_folder(user_id, payload.upload_folder)
+    return {"upload_folder": payload.upload_folder}
+
+
+@router.get("/customers/{user_id}/upload")
+def get_customer_upload_usage(user_id: int, admin=Depends(require_api_admin)):
+    """Kontingent-Übersicht (Dateien + genutzter/verbleibender Speicher) für
+    den Kunden - z.B. damit Concorde das später irgendwo anzeigen kann."""
+    customer = _fetch_customer_or_404(user_id)
+    if not customer["upload_folder"]:
+        raise HTTPException(status_code=404, detail="Für diesen Kunden ist kein Upload freigeschaltet.")
+    return get_quota_usage(customer["upload_folder"])
 
 
 @router.post("/scan")

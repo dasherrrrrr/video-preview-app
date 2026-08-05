@@ -51,3 +51,14 @@ def set_permissions(user_id: int, video_ids: list[int]) -> None:
             "INSERT INTO permissions (user_id, video_id) VALUES (?, ?)",
             [(user_id, video_id) for video_id in video_ids],
         )
+
+
+def set_upload_folder(user_id: int, folder: str | None) -> None:
+    """Setzt den Ordner (relativ zu VIDEOS_DIR), in dem dieser Kunde per
+    /api/upload Dateien hochladen darf - siehe app/uploads.py. None/leer
+    deaktiviert den Upload für diesen Kunden wieder."""
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE users SET upload_folder = ? WHERE id = ?",
+            (folder.strip() if folder and folder.strip() else None, user_id),
+        )

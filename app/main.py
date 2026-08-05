@@ -19,6 +19,7 @@ from .routers import (
     branding,
     settings,
     streaming,
+    uploads,
 )
 
 BASE_DIR = Path(__file__).parent
@@ -54,6 +55,7 @@ app.include_router(settings.router)
 app.include_router(branding.router)
 app.include_router(api.router)
 app.include_router(api_admin.router)
+app.include_router(uploads.router)
 
 
 @app.exception_handler(NotAuthenticated)

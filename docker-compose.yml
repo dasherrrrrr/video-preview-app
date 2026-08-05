@@ -9,6 +9,11 @@ services:
       - ./data:/app/data
       # Deine Videodateien, read-only eingebunden (die App muss dort nichts schreiben)
       - "${VIDEOS_HOST_PATH:-/mnt/user/videos}:/videos:ro"
+      # Derselbe Host-Pfad zusätzlich beschreibbar, NUR für Kunden-Uploads
+      # (siehe app/uploads.py) - bewusst ein zweiter Mount statt den obigen
+      # read-only zu entfernen, damit Lese-/Streaming-/Scan-Code nie
+      # versehentlich das Quellmaterial verändern kann.
+      - "${VIDEOS_HOST_PATH:-/mnt/user/videos}:/videos-rw"
     environment:
       # Fester Secret-Key, damit Logins nicht bei jedem Container-Neustart
       # ungültig werden. Wird aus .env gelesen (siehe .env.example) - ohne

@@ -115,6 +115,10 @@ def init_db() -> None:
                 # Welcher Admin ist für diesen Kunden zuständig - Grundlage für
                 # den späteren Mailversand bei Kommentaren.
                 "assigned_editor_id": "INTEGER REFERENCES users(id) ON DELETE SET NULL",
+                # Ordner (relativ zu VIDEOS_DIR) für den Datei-Upload des Kunden,
+                # z.B. "20260111" - siehe app/uploads.py. Ohne gesetzten Wert ist
+                # der Upload für diesen Kunden deaktiviert.
+                "upload_folder": "TEXT",
             },
         )
 

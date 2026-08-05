@@ -6,10 +6,13 @@ Mount bleibt read-only, damit Lese-/Streaming-/Scan-Code nie versehentlich das
 Quellmaterial verändern kann. Nur dieses Modul schreibt, und ausschließlich
 innerhalb von "<upload_folder>/upload/" eines Kunden.
 
-Das Kontingent wird nicht separat mitgezählt (keine eigene Spalte, kein
-Nachziehen nötig), sondern bei jedem Zugriff durch Aufsummieren der
+Der genutzte Speicher wird nicht separat mitgezählt (keine eigene Spalte,
+kein Nachziehen nötig), sondern bei jedem Zugriff durch Aufsummieren der
 tatsächlich im Upload-Ordner liegenden Dateien berechnet - so kann die Zahl
-nie mit dem echten Dateisystem auseinanderlaufen."""
+nie mit dem echten Dateisystem auseinanderlaufen. Das Kontingent selbst
+(die Obergrenze) ist dagegen pro Kunde in users.upload_quota_bytes
+gespeichert (siehe customers.set_upload_quota) und wird von den Aufrufern
+hier durchgereicht - Standardwert DEFAULT_QUOTA_BYTES, falls nichts gesetzt."""
 
 import os
 import re
@@ -20,7 +23,7 @@ from fastapi import HTTPException
 
 VIDEOS_RW_DIR = Path(os.environ.get("VIDEOS_RW_DIR", "/videos-rw"))
 
-QUOTA_BYTES = 5 * 1024 * 1024 * 1024  # 5 GB pro Kunde
+DEFAULT_QUOTA_BYTES = 5 * 1024 * 1024 * 1024  # 5 GB, falls kein individuelles Kontingent gesetzt ist
 
 ALLOWED_EXTENSIONS = {
     # Bilder
@@ -60,7 +63,8 @@ def get_upload_dir(upload_folder: str, create: bool = False) -> Path:
     return base
 
 
-def get_quota_usage(upload_folder: str) -> dict:
+def get_quota_usage(upload_folder: str, quota_bytes: int | None = None) -> dict:
+    quota = quota_bytes if quota_bytes and quota_bytes > 0 else DEFAULT_QUOTA_BYTES
     upload_dir = get_upload_dir(upload_folder)
     files = []
     total = 0
@@ -73,15 +77,15 @@ def get_quota_usage(upload_folder: str) -> dict:
     return {
         "files": files,
         "used_bytes": total,
-        "quota_bytes": QUOTA_BYTES,
-        "remaining_bytes": max(0, QUOTA_BYTES - total),
+        "quota_bytes": quota,
+        "remaining_bytes": max(0, quota - total),
     }
 
 
-def save_upload(upload_folder: str, filename: str, content: bytes) -> dict:
+def save_upload(upload_folder: str, filename: str, content: bytes, quota_bytes: int | None = None) -> dict:
     safe_name = _sanitize_filename(filename)
-    usage = get_quota_usage(upload_folder)
-    if usage["used_bytes"] + len(content) > QUOTA_BYTES:
+    usage = get_quota_usage(upload_folder, quota_bytes)
+    if usage["used_bytes"] + len(content) > usage["quota_bytes"]:
         raise HTTPException(
             status_code=400,
             detail=(

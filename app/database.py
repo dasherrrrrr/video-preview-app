@@ -119,6 +119,9 @@ def init_db() -> None:
                 # z.B. "20260111" - siehe app/uploads.py. Ohne gesetzten Wert ist
                 # der Upload für diesen Kunden deaktiviert.
                 "upload_folder": "TEXT",
+                # Upload-Kontingent in Bytes, individuell pro Kunde überschreibbar.
+                # NULL = Standard-Kontingent (uploads.DEFAULT_QUOTA_BYTES) gilt.
+                "upload_quota_bytes": "INTEGER",
             },
         )
 

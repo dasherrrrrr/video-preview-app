@@ -62,3 +62,14 @@ def set_upload_folder(user_id: int, folder: str | None) -> None:
             "UPDATE users SET upload_folder = ? WHERE id = ?",
             (folder.strip() if folder and folder.strip() else None, user_id),
         )
+
+
+def set_upload_quota(user_id: int, quota_bytes: int | None) -> None:
+    """Überschreibt das Upload-Kontingent für diesen einen Kunden (z.B. wenn
+    mehr Speicher gebraucht wird). None setzt wieder auf das globale
+    Standard-Kontingent zurück (uploads.DEFAULT_QUOTA_BYTES)."""
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE users SET upload_quota_bytes = ? WHERE id = ?",
+            (quota_bytes if quota_bytes and quota_bytes > 0 else None, user_id),
+        )

@@ -1,6 +1,7 @@
-"""Datei-Upload für Kunden (Bilder/kleine Videos, 5GB Kontingent pro Kunde) -
-siehe app/uploads.py für die eigentliche Logik. Nutzt dieselbe Token-Auth wie
-die übrige Kunden-API (/api/*)."""
+"""Datei-Upload für Kunden (Bilder/kleine Videos, Kontingent individuell pro
+Kunde einstellbar - siehe app/customers.py:set_upload_quota) - die eigentliche
+Logik steckt in app/uploads.py. Nutzt dieselbe Token-Auth wie die übrige
+Kunden-API (/api/*)."""
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 
@@ -19,7 +20,7 @@ def _require_upload_folder(user) -> str:
 
 @router.get("/upload")
 def list_uploads(user=Depends(require_api_token)):
-    return get_quota_usage(_require_upload_folder(user))
+    return get_quota_usage(_require_upload_folder(user), user["upload_quota_bytes"])
 
 
 @router.post("/upload")
@@ -28,7 +29,7 @@ async def upload_file(file: UploadFile, user=Depends(require_api_token)):
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Datei ist leer.")
-    return save_upload(folder, file.filename or "datei", content)
+    return save_upload(folder, file.filename or "datei", content, user["upload_quota_bytes"])
 
 
 @router.delete("/upload/{filename}")

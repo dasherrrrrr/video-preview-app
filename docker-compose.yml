@@ -24,6 +24,11 @@ services:
       - SMTP_FROM=${SMTP_FROM:-}
       - SMTP_USE_SSL=${SMTP_USE_SSL:-false}
       - APP_BASE_URL=${APP_BASE_URL:-}
+      # Weiterleitung von Monitoring-Alarmen (Unraid/TrueNAS) an Concordes
+      # IT-Vorfälle - siehe app/routers/api_admin.py:report_incident
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
+      - INCIDENT_INGEST_TOKEN=${INCIDENT_INGEST_TOKEN:-}
     restart: unless-stopped
 
     # VAAPI-Transcoding über eine Intel-GPU (z.B. Arc A380). Pfad über

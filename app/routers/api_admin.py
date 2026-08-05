@@ -3,6 +3,11 @@ selbst Kunden anlegen und ihnen Videos zuweisen, statt dass ein Admin dafür
 extra in die Video-Preview-App wechseln muss. Bewusst getrennt von /api/*
 (Kunden-Tokens), damit ein Kunden-Token niemals Verwaltungsrechte hat."""
 
+import json
+import os
+import urllib.error
+import urllib.request
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -106,3 +111,52 @@ def scan_catalog(admin=Depends(require_api_admin)):
     könnte die Verbindung vorher kappen. Der Scan läuft serverseitig aber
     trotzdem zu Ende, auch wenn der Concorde-Request währenddessen abbricht."""
     return scan_library()
+
+
+@router.post("/incidents")
+def report_incident(payload: dict, source: str, admin=Depends(require_api_admin)):
+    """Nimmt Alarme von externen Monitoring-Quellen (Unraid Apprise-Agent,
+    TrueNAS Alert-Service) entgegen und reicht sie als IT-Vorfall an Concorde
+    weiter. Bewusst hier angesiedelt statt direkt in Concorde, weil Concorde
+    unveröffentlicht ist und daher von außen nicht erreichbar - diese App ist
+    es bereits (video.dominik-sturz.de) und hat schon eine Token-Auth.
+
+    Akzeptiert sowohl Apprise-JSON ({"title", "message", "type"}) als auch
+    Slack-kompatible Payloads ({"text": "..."}), wie sie z.B. TrueNAs'
+    eingebauter "Slack"-Alert-Service verschickt."""
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    supabase_key = os.environ.get("SUPABASE_ANON_KEY", "")
+    incident_token = os.environ.get("INCIDENT_INGEST_TOKEN", "")
+    if not supabase_url or not supabase_key or not incident_token:
+        raise HTTPException(status_code=500, detail="Incident-Weiterleitung ist serverseitig nicht konfiguriert.")
+
+    title = (payload.get("title") or "").strip()
+    message = (payload.get("message") or payload.get("text") or "").strip()
+    itype = (payload.get("type") or "warning").strip().lower()
+
+    body = json.dumps(
+        {
+            "p_token": incident_token,
+            "p_source": source,
+            "p_title": title,
+            "p_message": message,
+            "p_type": itype,
+        }
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        f"{supabase_url}/rest/v1/rpc/report_external_incident",
+        data=body,
+        headers={
+            "apikey": supabase_key,
+            "Authorization": f"Bearer {supabase_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return {"ok": True, "incident_id": json.loads(resp.read())}
+    except urllib.error.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Concorde-Weiterleitung fehlgeschlagen: {exc.read().decode()}") from exc
+    except urllib.error.URLError as exc:
+        raise HTTPException(status_code=502, detail=f"Concorde nicht erreichbar: {exc.reason}") from exc

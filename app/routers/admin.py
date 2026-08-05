@@ -7,11 +7,18 @@ from fastapi.responses import RedirectResponse
 
 from ..auth import hash_password, require_admin
 from ..catalog import scan_library
-from ..customers import generate_token_for_user, revoke_token_for_user, set_permissions
+from ..customers import (
+    generate_token_for_user,
+    revoke_token_for_user,
+    set_permissions,
+    set_upload_folder,
+    set_upload_quota,
+)
 from ..database import get_db
 from ..media import get_authorized_video
 from ..templates_env import templates
 from ..thumbnails import set_custom_thumbnail
+from ..uploads import DEFAULT_QUOTA_BYTES, get_quota_usage
 
 ALLOWED_THUMBNAIL_TYPES = {"image/png", "image/jpeg"}
 MAX_THUMBNAIL_SIZE = 15 * 1024 * 1024  # 15 MB
@@ -166,7 +173,7 @@ async def upload_thumbnail(
 def _fetch_user_or_404(user_id: int):
     with get_db() as conn:
         target = conn.execute(
-            "SELECT id, username FROM users WHERE id = ?", (user_id,)
+            "SELECT id, username, upload_folder, upload_quota_bytes FROM users WHERE id = ?", (user_id,)
         ).fetchone()
     if not target:
         raise HTTPException(status_code=404, detail="Nutzer nicht gefunden.")
@@ -236,6 +243,8 @@ def edit_permissions(user_id: int, request: Request, admin=Depends(require_admin
             groups.append(groups_by_folder[folder])
         groups_by_folder[folder]["videos"].append(v)
 
+    upload_usage = get_quota_usage(target["upload_folder"], target["upload_quota_bytes"]) if target["upload_folder"] else None
+
     return templates.TemplateResponse(
         "admin_permissions.html",
         {
@@ -244,6 +253,8 @@ def edit_permissions(user_id: int, request: Request, admin=Depends(require_admin
             "target": target,
             "groups": groups,
             "assigned_ids": assigned_ids,
+            "upload_usage": upload_usage,
+            "default_quota_gb": DEFAULT_QUOTA_BYTES / (1024**3),
         },
     )
 
@@ -254,6 +265,34 @@ async def update_permissions(user_id: int, request: Request, admin=Depends(requi
     form = await request.form()
     video_ids = [int(v) for v in form.getlist("video_ids")]
     set_permissions(user_id, video_ids)
+    return RedirectResponse(url=f"/admin/users/{user_id}/permissions", status_code=303)
+
+
+@router.post("/users/{user_id}/upload-settings")
+def update_upload_settings(
+    user_id: int,
+    upload_folder: str = Form(""),
+    upload_quota_gb: str = Form(""),
+    admin=Depends(require_admin),
+):
+    """Legt fest, in welchem Ordner dieser Kunde per /api/upload Dateien
+    hochladen darf, und erlaubt optional ein individuelles Kontingent
+    (in GB) statt des globalen Standardwerts - z.B. wenn ein Kunde mehr
+    Speicher braucht."""
+    _fetch_user_or_404(user_id)
+    set_upload_folder(user_id, upload_folder.strip() or None)
+
+    quota_gb = upload_quota_gb.strip().replace(",", ".")
+    quota_bytes = None
+    if quota_gb:
+        try:
+            parsed = float(quota_gb)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Kontingent muss eine Zahl (GB) sein.")
+        if parsed > 0:
+            quota_bytes = int(parsed * 1024**3)
+    set_upload_quota(user_id, quota_bytes)
+
     return RedirectResponse(url=f"/admin/users/{user_id}/permissions", status_code=303)
 
 

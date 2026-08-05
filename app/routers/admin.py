@@ -243,8 +243,6 @@ def edit_permissions(user_id: int, request: Request, admin=Depends(require_admin
             groups.append(groups_by_folder[folder])
         groups_by_folder[folder]["videos"].append(v)
 
-    upload_usage = get_quota_usage(target["upload_folder"], target["upload_quota_bytes"]) if target["upload_folder"] else None
-
     return templates.TemplateResponse(
         "admin_permissions.html",
         {
@@ -253,8 +251,6 @@ def edit_permissions(user_id: int, request: Request, admin=Depends(require_admin
             "target": target,
             "groups": groups,
             "assigned_ids": assigned_ids,
-            "upload_usage": upload_usage,
-            "default_quota_gb": DEFAULT_QUOTA_BYTES / (1024**3),
         },
     )
 
@@ -266,6 +262,34 @@ async def update_permissions(user_id: int, request: Request, admin=Depends(requi
     video_ids = [int(v) for v in form.getlist("video_ids")]
     set_permissions(user_id, video_ids)
     return RedirectResponse(url=f"/admin/users/{user_id}/permissions", status_code=303)
+
+
+def _fetch_customers_with_upload():
+    with get_db() as conn:
+        return conn.execute(
+            "SELECT id, username, upload_folder, upload_quota_bytes FROM users "
+            "WHERE is_admin = 0 ORDER BY username"
+        ).fetchall()
+
+
+@router.get("/quota")
+def list_quota(request: Request, admin=Depends(require_admin)):
+    customers = _fetch_customers_with_upload()
+    usage_by_id = {
+        c["id"]: get_quota_usage(c["upload_folder"], c["upload_quota_bytes"])
+        for c in customers
+        if c["upload_folder"]
+    }
+    return templates.TemplateResponse(
+        "admin_quota.html",
+        {
+            "request": request,
+            "user": admin,
+            "customers": customers,
+            "usage_by_id": usage_by_id,
+            "default_quota_gb": DEFAULT_QUOTA_BYTES / (1024**3),
+        },
+    )
 
 
 @router.post("/users/{user_id}/upload-settings")
@@ -293,7 +317,7 @@ def update_upload_settings(
             quota_bytes = int(parsed * 1024**3)
     set_upload_quota(user_id, quota_bytes)
 
-    return RedirectResponse(url=f"/admin/users/{user_id}/permissions", status_code=303)
+    return RedirectResponse(url="/admin/quota", status_code=303)
 
 
 @router.get("/videos/{video_id}")

@@ -163,6 +163,23 @@ textarea:focus, select:focus {
     font-size: 0.82rem;
 }
 
+.quota-row-form {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.quota-row-form input[type="text"] {
+    flex: 1;
+    min-width: 140px;
+}
+
+.quota-row-form input[type="number"] {
+    width: 90px;
+}
+
 button {
     background: var(--accent);
     color: #0c1210;

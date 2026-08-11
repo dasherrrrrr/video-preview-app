@@ -15,11 +15,11 @@
         {% if shape["type"] == "circle" %}
         <circle cx="{{ shape['x'] * 100 }}" cy="{{ shape['y'] * 100 }}"
                 r="{{ (shape.get('radius', 0.05)) * 100 }}"
-                fill="none" stroke="{{ color }}" stroke-width="2"></circle>
+                fill="none" stroke="{{ color }}" stroke-width="3.5"></circle>
         {% elif shape["type"] == "arrow" %}
         <line x1="{{ shape['x'] * 100 }}" y1="{{ shape['y'] * 100 }}"
               x2="{{ shape.get('x2', shape['x']) * 100 }}" y2="{{ shape.get('y2', shape['y']) * 100 }}"
-              stroke="{{ color }}" stroke-width="2" marker-end="url(#arrowhead-{{ loop.index }})"></line>
+              stroke="{{ color }}" stroke-width="3.5" marker-end="url(#arrowhead-{{ loop.index }})"></line>
         {% endif %}
         {% endfor %}
     </svg>

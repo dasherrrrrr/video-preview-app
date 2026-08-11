@@ -71,6 +71,13 @@ def init_db() -> None:
                 video_id INTEGER NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
                 timestamp_seconds REAL NOT NULL,
                 label TEXT,
+                -- Freihand-Markierungen (Kreise/Pfeile) auf dem Frame an diesem
+                -- Zeitpunkt, als JSON-Array gespeichert. Koordinaten sind relativ
+                -- (0.0-1.0) zur Framegröße, damit die Darstellung unabhängig von
+                -- der tatsächlichen Videoauflösung/Anzeigegröße funktioniert.
+                -- Beispiel: [{"type":"circle","x":0.4,"y":0.3,"radius":0.05},
+                --            {"type":"arrow","x1":0.2,"y1":0.2,"x2":0.5,"y2":0.4}]
+                drawing TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
 
@@ -124,6 +131,7 @@ def init_db() -> None:
                 "upload_quota_bytes": "INTEGER",
             },
         )
+        _migrate_add_columns(conn, "markers", {"drawing": "TEXT"})
 
 
 def _migrate_add_columns(conn: sqlite3.Connection, table: str, columns: dict) -> None:

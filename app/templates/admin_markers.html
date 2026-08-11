@@ -5,7 +5,7 @@
 
 <table class="user-table">
     <thead>
-        <tr><th>Video</th><th>Nutzer</th><th>Zeitstempel</th><th>Beschreibung</th><th>Erstellt</th></tr>
+        <tr><th>Video</th><th>Nutzer</th><th>Zeitstempel</th><th>Beschreibung</th><th>Markierung</th><th>Erstellt</th></tr>
     </thead>
     <tbody>
         {% for m in markers %}
@@ -14,11 +14,19 @@
             <td>{{ m["username"] }}</td>
             <td class="mono">{{ (m["timestamp_seconds"] // 60) | int }}:{{ "%02d" | format(m["timestamp_seconds"] % 60) }}</td>
             <td>{{ m["label"] }}</td>
+            <td>
+                {% if m["drawing"] %}
+                {% set video_id = m["video_id"] %}
+                {% include "_marker_drawing_overlay.html" with context %}
+                {% else %}
+                <span class="muted">–</span>
+                {% endif %}
+            </td>
             <td class="mono">{{ m["created_at"] }}</td>
         </tr>
         {% endfor %}
         {% if not markers %}
-        <tr><td colspan="5">Noch keine Marker gesetzt.</td></tr>
+        <tr><td colspan="6">Noch keine Marker gesetzt.</td></tr>
         {% endif %}
     </tbody>
 </table>

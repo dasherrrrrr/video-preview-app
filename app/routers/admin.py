@@ -1,3 +1,4 @@
+import json
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -22,6 +23,14 @@ from ..uploads import DEFAULT_QUOTA_BYTES, get_quota_usage
 
 ALLOWED_THUMBNAIL_TYPES = {"image/png", "image/jpeg"}
 MAX_THUMBNAIL_SIZE = 15 * 1024 * 1024  # 15 MB
+
+
+def _marker_row_to_dict(row) -> dict:
+    """sqlite3.Row -> dict mit geparster `drawing`-Spalte (JSON-Text -> Liste
+    von Shapes), damit die Templates die Koordinaten direkt iterieren können."""
+    d = dict(row)
+    d["drawing"] = json.loads(d["drawing"]) if d.get("drawing") else []
+    return d
 
 router = APIRouter(prefix="/admin")
 
@@ -325,7 +334,7 @@ def video_detail(video_id: int, request: Request, admin=Depends(require_admin)):
     video = get_authorized_video(video_id, admin)
     with get_db() as conn:
         markers = conn.execute(
-            "SELECT m.timestamp_seconds, m.label, u.username "
+            "SELECT m.timestamp_seconds, m.label, m.drawing, u.username "
             "FROM markers m JOIN users u ON u.id = m.user_id "
             "WHERE m.video_id = ? ORDER BY m.timestamp_seconds",
             (video_id,),
@@ -342,7 +351,7 @@ def video_detail(video_id: int, request: Request, admin=Depends(require_admin)):
             "request": request,
             "user": admin,
             "video": video,
-            "markers": markers,
+            "markers": [_marker_row_to_dict(m) for m in markers],
             "comments": comments,
         },
     )
@@ -375,7 +384,7 @@ def admin_delete_comment(video_id: int, comment_id: int, admin=Depends(require_a
 def list_all_markers(request: Request, admin=Depends(require_admin)):
     with get_db() as conn:
         markers = conn.execute(
-            "SELECT m.id, m.timestamp_seconds, m.label, m.created_at, "
+            "SELECT m.id, m.timestamp_seconds, m.label, m.drawing, m.created_at, "
             "u.username, v.id AS video_id, v.title AS video_title "
             "FROM markers m "
             "JOIN users u ON u.id = m.user_id "
@@ -383,5 +392,6 @@ def list_all_markers(request: Request, admin=Depends(require_admin)):
             "ORDER BY v.filepath, u.username, m.timestamp_seconds"
         ).fetchall()
     return templates.TemplateResponse(
-        "admin_markers.html", {"request": request, "user": admin, "markers": markers}
+        "admin_markers.html",
+        {"request": request, "user": admin, "markers": [_marker_row_to_dict(m) for m in markers]},
     )

@@ -3,11 +3,12 @@ Projekt "Concorde Manager"), die Videos ohne Session-Login dieser App
 abspielen bzw. anzeigen wollen. Auth über Authorization: Bearer <token>
 statt Cookie (siehe api_auth.require_api_token)."""
 
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from ..api_auth import require_api_token
 from ..catalog import VIDEOS_DIR
@@ -23,10 +24,42 @@ router = APIRouter(prefix="/api")
 # Browser auf) wird zentral über CORSMiddleware in main.py erlaubt - inkl.
 # Preflight-Handling für die POST/DELETE-Endpunkte hier unten.
 
+MAX_DRAWING_SHAPES = 20  # verhindert übergroße Payloads / Missbrauch
+
+
+class DrawingShape(BaseModel):
+    """Eine einzelne Kreis- oder Pfeil-Markierung auf dem Frame. Koordinaten
+    sind relativ (0.0-1.0) zur Framegröße - siehe Kommentar in database.py."""
+
+    type: str  # "circle" | "arrow"
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    radius: float | None = Field(default=None, ge=0, le=1)
+    x2: float | None = Field(default=None, ge=0, le=1)
+    y2: float | None = Field(default=None, ge=0, le=1)
+    color: str | None = None
+
+    @field_validator("type")
+    @classmethod
+    def _valid_type(cls, v: str) -> str:
+        if v not in ("circle", "arrow"):
+            raise ValueError("type muss 'circle' oder 'arrow' sein")
+        return v
+
+    @field_validator("color")
+    @classmethod
+    def _valid_color(cls, v: str | None) -> str | None:
+        import re
+
+        if v is not None and not re.fullmatch(r"#[0-9a-fA-F]{6}", v):
+            raise ValueError("color muss ein Hex-Farbcode sein, z.B. #ff3b30")
+        return v
+
 
 class MarkerCreate(BaseModel):
     timestamp_seconds: float
     label: str
+    drawing: list[DrawingShape] | None = Field(default=None, max_length=MAX_DRAWING_SHAPES)
 
 
 class CommentCreate(BaseModel):
@@ -95,15 +128,21 @@ def video_detail(video_id: int, user=Depends(require_api_token)):
             (video_id,),
         ).fetchall()
         markers = conn.execute(
-            "SELECT id, timestamp_seconds, label FROM markers "
+            "SELECT id, timestamp_seconds, label, drawing FROM markers "
             "WHERE user_id = ? AND video_id = ? ORDER BY timestamp_seconds",
             (user["id"], video_id),
         ).fetchall()
     return {
         **_video_to_dict(video),
         "comments": [dict(c) for c in comments],
-        "markers": [dict(m) for m in markers],
+        "markers": [_marker_to_dict(m) for m in markers],
     }
+
+
+def _marker_to_dict(row) -> dict:
+    d = dict(row)
+    d["drawing"] = json.loads(d["drawing"]) if d.get("drawing") else None
+    return d
 
 
 @router.get("/thumbnail/{video_id}")
@@ -148,12 +187,22 @@ def create_marker(video_id: int, payload: MarkerCreate, user=Depends(require_api
     label = payload.label.strip()
     if not label:
         raise HTTPException(status_code=400, detail="Marker brauchen eine Beschreibung.")
+    drawing_json = (
+        json.dumps([shape.model_dump(exclude_none=True) for shape in payload.drawing])
+        if payload.drawing
+        else None
+    )
     with get_db() as conn:
         cursor = conn.execute(
-            "INSERT INTO markers (user_id, video_id, timestamp_seconds, label) VALUES (?, ?, ?, ?)",
-            (user["id"], video_id, payload.timestamp_seconds, label),
+            "INSERT INTO markers (user_id, video_id, timestamp_seconds, label, drawing) VALUES (?, ?, ?, ?, ?)",
+            (user["id"], video_id, payload.timestamp_seconds, label, drawing_json),
         )
-    return {"id": cursor.lastrowid, "timestamp_seconds": payload.timestamp_seconds, "label": label}
+    return {
+        "id": cursor.lastrowid,
+        "timestamp_seconds": payload.timestamp_seconds,
+        "label": label,
+        "drawing": json.loads(drawing_json) if drawing_json else None,
+    }
 
 
 @router.delete("/markers/{marker_id}")

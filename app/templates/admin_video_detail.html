@@ -22,12 +22,16 @@
 {% if markers %}
 <ul class="marker-list">
     {% for m in markers %}
+    {% set video_id = video["id"] %}
     <li>
         <button type="button" class="marker-jump" data-seconds="{{ m['timestamp_seconds'] }}">
             {{ (m["timestamp_seconds"] // 60) | int }}:{{ "%02d" | format(m["timestamp_seconds"] % 60) }}
         </button>
         <span>{{ m["label"] }}</span>
         <span class="mono">({{ m["username"] }})</span>
+        {% if m["drawing"] %}
+        {% include "_marker_drawing_overlay.html" with context %}
+        {% endif %}
     </li>
     {% endfor %}
 </ul>

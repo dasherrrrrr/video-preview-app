@@ -1,0 +1,26 @@
+{# Zeigt das Video-Thumbnail mit den vom Kunden eingezeichneten Kreisen/Pfeilen
+   als SVG-Overlay darüber. Erwartet im Kontext: m (Marker-dict mit "drawing"),
+   video_id, loop (für eine pro Zeile eindeutige Marker-ID). #}
+<div class="marker-drawing-preview">
+    <img src="/thumbnail/{{ video_id }}" alt="" loading="lazy">
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+        <defs>
+            <marker id="arrowhead-{{ loop.index }}" markerWidth="6" markerHeight="6"
+                    refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L6,3 L0,6 Z" fill="{{ shape.get('color', '#ff3b30') if shape is defined else '#ff3b30' }}"></path>
+            </marker>
+        </defs>
+        {% for shape in m["drawing"] %}
+        {% set color = shape.get("color", "#ff3b30") %}
+        {% if shape["type"] == "circle" %}
+        <circle cx="{{ shape['x'] * 100 }}" cy="{{ shape['y'] * 100 }}"
+                r="{{ (shape.get('radius', 0.05)) * 100 }}"
+                fill="none" stroke="{{ color }}" stroke-width="2"></circle>
+        {% elif shape["type"] == "arrow" %}
+        <line x1="{{ shape['x'] * 100 }}" y1="{{ shape['y'] * 100 }}"
+              x2="{{ shape.get('x2', shape['x']) * 100 }}" y2="{{ shape.get('y2', shape['y']) * 100 }}"
+              stroke="{{ color }}" stroke-width="2" marker-end="url(#arrowhead-{{ loop.index }})"></line>
+        {% endif %}
+        {% endfor %}
+    </svg>
+</div>

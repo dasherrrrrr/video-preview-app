@@ -1,6 +1,6 @@
 """
 Vorschau-Transcoding: jedes Video, das einem Kunden zugewiesen wird, wird
-auf ein einheitliches Vorschauformat gebracht (720p, ~6 Mbit/s H.264) -
+auf ein einheitliches Vorschauformat gebracht (1080p, ~12 Mbit/s H.264) -
 unabhängig vom Quellcodec/-bitrate. Das sorgt für gleichmäßiges, planbares
 Abspielverhalten auf allen Geräten/Verbindungen und ist einfacher als eine
 Fallunterscheidung "brauchts überhaupt". Nutzt VAAPI für Hardware-Decode+
@@ -20,8 +20,8 @@ TRANSCODE_CACHE_DIR = DB_PATH.parent / "transcoded"
 # tatsächliche GPU des Hosts (über VAAPI_DEVICE in .env) immer auf diesen Node.
 VAAPI_DEVICE = "/dev/dri/renderD128"
 
-TARGET_BIT_RATE = "6M"
-TARGET_BUFSIZE = "12M"
+TARGET_BIT_RATE = "12M"
+TARGET_BUFSIZE = "24M"
 
 
 def get_cache_path(video_id: int) -> Path:
@@ -29,7 +29,7 @@ def get_cache_path(video_id: int) -> Path:
 
 
 def ensure_transcoded(video_id: int, source_path: Path) -> Path:
-    """Gibt den Pfad der 720p/6-Mbit-Vorschauversion zurück, transkodiert bei
+    """Gibt den Pfad der 1080p/12-Mbit-Vorschauversion zurück, transkodiert bei
     Bedarf zuerst. Blockiert den aufrufenden Thread (FastAPI führt sync-Routen
     im Threadpool aus, daher ist das für dieses Preview-App-Nutzungsmuster
     ok)."""
@@ -55,16 +55,16 @@ def ensure_transcoded(video_id: int, source_path: Path) -> Path:
         # Video, das im Browser gar nicht oder nur schwarz mit Ton abspielt).
         "-map", "0:v:0",
         "-map", "0:a:0",
-        # Runterskalieren auf 720p (Breite automatisch, gerade Zahl via -2) -
+        # Runterskalieren auf 1080p (Breite automatisch, gerade Zahl via -2) -
         # für eine Vorschau reicht das, transkodiert spürbar schneller und
         # ergibt kleinere Dateien als die Kamera-Originalauflösung (meist 4K).
         # format=nv12 löst nebenbei auch 10-Bit-HEVC-Quellen (DJI Main10/P010)
         # auf 8-Bit auf - h264_vaapi kann sonst nur 8-Bit encodieren ("No
         # usable encoding profile found").
-        "-vf", "scale_vaapi=w=-2:h=720:format=nv12",
+        "-vf", "scale_vaapi=w=-2:h=1080:format=nv12",
         "-c:v", "h264_vaapi",
         "-profile:v", "main",  # breit kompatibles Profil (iOS/Safari-Hardwaredecode)
-        "-level", "4.0",
+        "-level", "4.1",  # deckt 1080p bei dieser Bitrate/Framerate sicher ab
         # Feste Ziel-Bitrate statt konstanter Qualität (-qp) - für ein
         # einheitliches, vorhersagbares Vorschauformat über alle Videos
         # hinweg, unabhängig vom Bewegungsanteil der Quelle.

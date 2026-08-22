@@ -72,12 +72,12 @@ def _transcode_in_background(video_ids: list[int]) -> None:
     def _run():
         with get_db() as conn:
             rows = conn.execute(
-                f"SELECT id, filepath, codec FROM videos WHERE id IN "
+                f"SELECT id, filepath, codec, bit_rate, width FROM videos WHERE id IN "
                 f"({','.join('?' for _ in video_ids)})",
                 video_ids,
             ).fetchall()
         for row in rows:
-            if not needs_transcode(row["codec"]):
+            if not needs_transcode(row["codec"], row["bit_rate"], row["width"]):
                 continue
             if get_cache_path(row["id"]).is_file():
                 continue

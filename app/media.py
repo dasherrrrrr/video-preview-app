@@ -21,7 +21,7 @@ RANGE_RE = re.compile(r"bytes=(\d+)-(\d*)")
 def get_authorized_video(video_id: int, user):
     with get_db() as conn:
         video = conn.execute(
-            "SELECT id, filepath, title, duration_seconds, codec FROM videos WHERE id = ?",
+            "SELECT id, filepath, title, duration_seconds, codec, bit_rate, width FROM videos WHERE id = ?",
             (video_id,),
         ).fetchone()
         if not video:

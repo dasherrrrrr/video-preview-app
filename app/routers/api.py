@@ -15,7 +15,7 @@ from ..catalog import VIDEOS_DIR
 from ..database import get_db
 from ..mailer import send_email, video_watch_url
 from ..media import build_download_response, build_stream_response, get_authorized_video
-from ..thumbnails import get_thumbnail_path
+from ..thumbnails import generate_marker_frame, get_marker_frame_path, get_thumbnail_path
 from ..transcode import ensure_transcoded, needs_transcode
 
 router = APIRouter(prefix="/api")
@@ -161,7 +161,7 @@ def api_stream_video(video_id: int, request: Request, user=Depends(require_api_t
     if not filepath.is_file():
         raise HTTPException(status_code=404, detail="Datei nicht (mehr) vorhanden.")
 
-    if needs_transcode(video["codec"]):
+    if needs_transcode(video["codec"], video["bit_rate"], video["width"]):
         try:
             filepath = ensure_transcoded(video_id, filepath)
         except RuntimeError as exc:
@@ -183,7 +183,7 @@ def api_download_video(video_id: int, user=Depends(require_api_token)):
 
 @router.post("/videos/{video_id}/markers")
 def create_marker(video_id: int, payload: MarkerCreate, user=Depends(require_api_token)):
-    get_authorized_video(video_id, user)  # wirft 403/404, falls kein Zugriff
+    video = get_authorized_video(video_id, user)  # wirft 403/404, falls kein Zugriff
     label = payload.label.strip()
     if not label:
         raise HTTPException(status_code=400, detail="Marker brauchen eine Beschreibung.")
@@ -197,12 +197,42 @@ def create_marker(video_id: int, payload: MarkerCreate, user=Depends(require_api
             "INSERT INTO markers (user_id, video_id, timestamp_seconds, label, drawing) VALUES (?, ?, ?, ?, ?)",
             (user["id"], video_id, payload.timestamp_seconds, label, drawing_json),
         )
+    marker_id = cursor.lastrowid
+    if drawing_json:
+        # Frame exakt zum Marker-Zeitpunkt extrahieren, damit die Kreis-/
+        # Pfeil-Markierung in der Admin-Ansicht auf dem passenden Bild liegt
+        # statt auf dem generischen (zeitlich meist abweichenden) Video-
+        # Thumbnail. Läuft synchron - ffmpeg-Einzelframe-Extraktion ist
+        # schnell genug, um hier nicht extra einen Hintergrund-Thread zu
+        # brauchen.
+        filepath = VIDEOS_DIR / video["filepath"]
+        if filepath.is_file():
+            generate_marker_frame(marker_id, filepath, payload.timestamp_seconds)
     return {
-        "id": cursor.lastrowid,
+        "id": marker_id,
         "timestamp_seconds": payload.timestamp_seconds,
         "label": label,
         "drawing": json.loads(drawing_json) if drawing_json else None,
     }
+
+
+@router.get("/marker-frame/{marker_id}")
+def api_marker_frame(marker_id: int, user=Depends(require_api_token)):
+    """Liefert den zum Marker-Zeitpunkt extrahierten Frame (siehe
+    create_marker) - Fallback auf das generische Video-Thumbnail übernimmt
+    das Template, falls hier 404 zurückkommt (z.B. bei Markern von vor
+    dieser Funktion)."""
+    with get_db() as conn:
+        marker = conn.execute(
+            "SELECT id, video_id FROM markers WHERE id = ?", (marker_id,)
+        ).fetchone()
+    if not marker:
+        raise HTTPException(status_code=404, detail="Marker nicht gefunden.")
+    get_authorized_video(marker["video_id"], user)  # wirft 403, falls kein Zugriff aufs Video
+    path = get_marker_frame_path(marker_id)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Kein Frame für diesen Marker vorhanden.")
+    return FileResponse(path, media_type="image/jpeg")
 
 
 @router.delete("/markers/{marker_id}")
@@ -214,6 +244,7 @@ def delete_marker(marker_id: int, user=Depends(require_api_token)):
         if not marker:
             raise HTTPException(status_code=404, detail="Marker nicht gefunden.")
         conn.execute("DELETE FROM markers WHERE id = ?", (marker_id,))
+    get_marker_frame_path(marker_id).unlink(missing_ok=True)
     return {"ok": True}
 
 

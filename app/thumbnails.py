@@ -8,10 +8,40 @@ from pathlib import Path
 from .database import DB_PATH
 
 THUMBNAIL_CACHE_DIR = DB_PATH.parent / "thumbnails"
+MARKER_FRAME_CACHE_DIR = DB_PATH.parent / "marker_frames"
 
 
 def get_thumbnail_path(video_id: int) -> Path:
     return THUMBNAIL_CACHE_DIR / f"{video_id}.jpg"
+
+
+def get_marker_frame_path(marker_id: int) -> Path:
+    return MARKER_FRAME_CACHE_DIR / f"{marker_id}.jpg"
+
+
+def generate_marker_frame(marker_id: int, source_path: Path, timestamp_seconds: float) -> None:
+    """Schreibt ein JPEG des exakten Frames zum Marker-Zeitpunkt - das
+    generische Video-Thumbnail (siehe generate_thumbnail) ist an einem festen
+    frühen Zeitpunkt und passt daher meist nicht zu dem Frame, auf den sich
+    eine Kreis-/Pfeil-Markierung tatsächlich bezieht (das Motiv kann sich bis
+    dahin ja schon bewegt/geändert haben). Schlägt lautlos fehl (kein Bild),
+    das Overlay fällt dann in der Vorlage auf das generische Thumbnail
+    zurück."""
+    MARKER_FRAME_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    dest_path = get_marker_frame_path(marker_id)
+    cmd = [
+        "ffmpeg", "-y",
+        "-ss", str(max(timestamp_seconds, 0)),
+        "-i", str(source_path),
+        "-frames:v", "1",
+        "-vf", "scale=480:-1",
+        "-q:v", "4",
+        str(dest_path),
+    ]
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, timeout=30)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        dest_path.unlink(missing_ok=True)
 
 
 def generate_thumbnail(video_id: int, source_path: Path, duration_seconds: float | None) -> None:

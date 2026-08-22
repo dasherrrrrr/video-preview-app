@@ -1,8 +1,11 @@
-{# Zeigt das Video-Thumbnail mit den vom Kunden eingezeichneten Kreisen/Pfeilen
-   als SVG-Overlay darüber. Erwartet im Kontext: m (Marker-dict mit "drawing"),
-   video_id, loop (für eine pro Zeile eindeutige Marker-ID). #}
+{# Zeigt den Frame zum Marker-Zeitpunkt (Fallback: generisches Video-
+   Thumbnail, falls kein Marker-Frame existiert, z.B. bei älteren Markern von
+   vor Einführung dieser Funktion) mit den vom Kunden eingezeichneten Kreisen/
+   Pfeilen als SVG-Overlay darüber. Erwartet im Kontext: m (Marker-dict mit
+   "id" und "drawing"), video_id, loop (für eine pro Zeile eindeutige
+   Marker-ID). #}
 <div class="marker-drawing-preview">
-    <img src="/thumbnail/{{ video_id }}" alt="" loading="lazy">
+    <img src="/marker-frame/{{ m['id'] }}" onerror="this.onerror=null;this.src='/thumbnail/{{ video_id }}';" alt="" loading="lazy">
     <svg viewBox="0 0 100 100" preserveAspectRatio="none">
         <defs>
             <marker id="arrowhead-{{ loop.index }}" markerWidth="6" markerHeight="6"

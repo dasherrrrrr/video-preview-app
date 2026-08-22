@@ -132,6 +132,19 @@ def init_db() -> None:
             },
         )
         _migrate_add_columns(conn, "markers", {"drawing": "TEXT"})
+        _migrate_add_columns(
+            conn,
+            "videos",
+            {
+                # Für die Transcode-Entscheidung: manche Kamera-/Drohnen-Originale
+                # sind zwar H.264 (also "browser-kompatibel"), aber mit Bitraten
+                # von 100+ Mbit/s in 4K - das ruckelt auf jeder normalen
+                # Verbindung. Werden zusätzlich zum Codec geprüft, siehe
+                # transcode.needs_transcode().
+                "bit_rate": "INTEGER",
+                "width": "INTEGER",
+            },
+        )
 
 
 def _migrate_add_columns(conn: sqlite3.Connection, table: str, columns: dict) -> None:

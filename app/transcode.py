@@ -15,15 +15,24 @@ from .database import DB_PATH
 # alles andere (v.a. hevc/h265) wird vor der Auslieferung transkodiert.
 BROWSER_COMPATIBLE_CODECS = {"h264", "vp8", "vp9", "av1"}
 
-TRANSCODE_CACHE_DIR = DB_PATH.parent / "transcoded"
+# Manche Kamera-/Drohnen-Originale sind zwar H.264 ("browser-kompatibel"),
+# aber mit Bitraten von 100+ Mbit/s in 4K - das ruckelt auf praktisch jeder
+# Verbindung (Mobilfunk allemal, oft auch WLAN). Alles darüber wird trotz
+# kompatiblem Codec auf die Vorschau-Bitrate heruntertranskodiert.
+MAX_PASSTHROUGH_BIT_RATE = 8_000_000  # 8 Mbit/s
+MAX_PASSTHROUGH_WIDTH = 1920  # > Full HD wird heruntertranskodiert
 
-# Der Ziel-Pfad im Container ist immer fix - docker-compose.yml mappt die
-# tatsächliche GPU des Hosts (über VAAPI_DEVICE in .env) immer auf diesen Node.
-VAAPI_DEVICE = "/dev/dri/renderD128"
 
-
-def needs_transcode(codec: str | None) -> bool:
-    return bool(codec) and codec.lower() not in BROWSER_COMPATIBLE_CODECS
+def needs_transcode(codec: str | None, bit_rate: int | None = None, width: int | None = None) -> bool:
+    if not codec:
+        return False
+    if codec.lower() not in BROWSER_COMPATIBLE_CODECS:
+        return True
+    if bit_rate and bit_rate > MAX_PASSTHROUGH_BIT_RATE:
+        return True
+    if width and width > MAX_PASSTHROUGH_WIDTH:
+        return True
+    return False
 
 
 def get_cache_path(video_id: int) -> Path:
@@ -56,7 +65,21 @@ def ensure_transcoded(video_id: int, source_path: Path) -> Path:
         # usable encoding profile found").
         "-vf", "scale_vaapi=w=-2:h=720:format=nv12",
         "-c:v", "h264_vaapi",
+        "-profile:v", "main",  # breit kompatibles Profil (iOS/Safari-Hardwaredecode)
+        "-level", "4.0",
         "-qp", "24",  # konstante Qualität statt unbegrenzter Bitrate (sonst oft größer als Quelle)
+        # Ohne Bitrate-Deckel kann -qp bei bewegungsreichen Szenen (z.B.
+        # Drohnenaufnahmen) kurzzeitig auf Bitraten hochschnellen, die auf
+        # Mobilverbindungen zu Rucklern/Rebuffering führen - daher zusätzlich
+        # hart deckeln.
+        "-maxrate", "4M",
+        "-bufsize", "8M",
+        # Festes, kurzes Keyframe-Intervall (alle 2s bei 24fps) statt
+        # VAAPI-Standard (oft deutlich länger) - sorgt für gleichmäßigeres
+        # Rebuffering-Verhalten und schnelleres Seeking/Starten auf Mobilgeräten.
+        "-g", "48",
+        "-keyint_min", "48",
+        "-sc_threshold", "0",
         "-c:a", "aac",
         "-movflags", "+faststart",
         str(tmp_path),

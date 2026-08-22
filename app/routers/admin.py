@@ -334,7 +334,7 @@ def video_detail(video_id: int, request: Request, admin=Depends(require_admin)):
     video = get_authorized_video(video_id, admin)
     with get_db() as conn:
         markers = conn.execute(
-            "SELECT m.timestamp_seconds, m.label, m.drawing, u.username "
+            "SELECT m.id, m.timestamp_seconds, m.label, m.drawing, u.username "
             "FROM markers m JOIN users u ON u.id = m.user_id "
             "WHERE m.video_id = ? ORDER BY m.timestamp_seconds",
             (video_id,),

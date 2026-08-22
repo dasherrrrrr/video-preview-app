@@ -47,6 +47,14 @@ def ensure_transcoded(video_id: int, source_path: Path) -> Path:
         "-vaapi_device", VAAPI_DEVICE,
         "-hwaccel_output_format", "vaapi",
         "-i", str(source_path),
+        # Nur den ersten Video- und Audio-Stream übernehmen. Ohne das würde
+        # z.B. ein Timecode-Datenstream (üblich bei professionellen Kameras,
+        # Codec "tmcd") unverändert mitkopiert - der bekommt beim Neu-Muxen
+        # keine passende neue Zeitbasis und macht dann die Dauer/Bitrate des
+        # gesamten Containers kaputt (führte zu "Duration: N/A" und einem
+        # Video, das im Browser gar nicht oder nur schwarz mit Ton abspielt).
+        "-map", "0:v:0",
+        "-map", "0:a:0",
         # Runterskalieren auf 720p (Breite automatisch, gerade Zahl via -2) -
         # für eine Vorschau reicht das, transkodiert spürbar schneller und
         # ergibt kleinere Dateien als die Kamera-Originalauflösung (meist 4K).

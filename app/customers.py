@@ -3,13 +3,19 @@
 damit Concorde dieselben Aktionen (Kunde anlegen, Videos zuweisen, Token
 erzeugen) ausführen kann wie ein Admin direkt in dieser App."""
 
+import os
 import secrets
+import threading
+from pathlib import Path
 
 from fastapi import HTTPException
 
 from .api_auth import generate_api_token, hash_token
 from .auth import hash_password
 from .database import get_db
+from .transcode import ensure_transcoded, get_cache_path, needs_transcode
+
+VIDEOS_DIR = Path(os.environ.get("VIDEOS_DIR", "/videos"))
 
 
 def create_customer(username: str, email: str = "", phone: str = "") -> int:
@@ -51,6 +57,37 @@ def set_permissions(user_id: int, video_ids: list[int]) -> None:
             "INSERT INTO permissions (user_id, video_id) VALUES (?, ?)",
             [(user_id, video_id) for video_id in video_ids],
         )
+    _transcode_in_background(video_ids)
+
+
+def _transcode_in_background(video_ids: list[int]) -> None:
+    """Videos werden nicht mehr beim Katalog-Scan pauschal transkodiert
+    (bei zehntausenden Dateien viel zu teuer), sondern erst wenn sie einem
+    Kunden zugewiesen werden - genau dann werden sie tatsächlich gebraucht.
+    Läuft im Hintergrund-Thread, damit die Zuweisung selbst nicht auf
+    (ggf. viele) Transcodes warten muss; /api/stream transkodiert notfalls
+    trotzdem noch on-demand, falls ein Kunde das Video öffnet, bevor dieser
+    Hintergrund-Thread fertig ist."""
+
+    def _run():
+        with get_db() as conn:
+            rows = conn.execute(
+                f"SELECT id, filepath, codec FROM videos WHERE id IN "
+                f"({','.join('?' for _ in video_ids)})",
+                video_ids,
+            ).fetchall()
+        for row in rows:
+            if not needs_transcode(row["codec"]):
+                continue
+            if get_cache_path(row["id"]).is_file():
+                continue
+            try:
+                ensure_transcoded(row["id"], VIDEOS_DIR / row["filepath"])
+            except RuntimeError:
+                pass
+
+    if video_ids:
+        threading.Thread(target=_run, daemon=True).start()
 
 
 def set_upload_folder(user_id: int, folder: str | None) -> None:

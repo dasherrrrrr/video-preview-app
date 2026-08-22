@@ -11,7 +11,6 @@ from pathlib import Path
 
 from .database import get_db
 from .thumbnails import generate_thumbnail, get_thumbnail_path
-from .transcode import ensure_transcoded, needs_transcode
 from .transcode import get_cache_path as get_transcode_cache_path
 
 VIDEOS_DIR = Path(os.environ.get("VIDEOS_DIR", "/videos"))
@@ -103,31 +102,17 @@ def scan_library() -> dict:
                 get_transcode_cache_path(row["id"]).unlink(missing_ok=True)
                 removed += 1
 
-    # Direkt beim Scan vortranskodieren statt beim ersten Kundenaufruf - sonst
-    # wartet der erste Kunde, der ein neues Video öffnet, auf den kompletten
-    # Transcode. Läuft synchron im selben Request (der Scan-Button im Admin-
-    # Bereich braucht dadurch länger, das ist hier ok).
-    transcoded = 0
-    transcode_failed = 0
-    with get_db() as conn:
-        videos_needing_transcode = conn.execute(
-            "SELECT id, filepath, codec FROM videos"
-        ).fetchall()
-    for video in videos_needing_transcode:
-        if not needs_transcode(video["codec"]):
-            continue
-        if get_transcode_cache_path(video["id"]).is_file():
-            continue
-        try:
-            ensure_transcoded(video["id"], VIDEOS_DIR / video["filepath"])
-            transcoded += 1
-        except RuntimeError:
-            transcode_failed += 1
-
+    # Transkodiert wird absichtlich nicht mehr hier: bei mehreren tausend
+    # Dateien in der Bibliothek wäre das Vortranskodieren aller Videos beim
+    # Scan viel zu teuer (CPU/GPU, Speicher, Laufzeit), obwohl die meisten nie
+    # einem Kunden zugewiesen werden. Stattdessen wird pro Video erst dann
+    # transkodiert, wenn es einem Kunden zugewiesen wird (siehe
+    # customers.set_permissions) - mit /api/stream als Fallback, falls ein
+    # Video aufgerufen wird, bevor der Zuweisungs-Transcode fertig ist.
     return {
         "added": added,
         "removed": removed,
         "unchanged": skipped_existing,
-        "transcoded": transcoded,
-        "transcode_failed": transcode_failed,
+        "transcoded": 0,
+        "transcode_failed": 0,
     }

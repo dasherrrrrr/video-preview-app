@@ -16,7 +16,7 @@ from ..database import get_db
 from ..mailer import send_email, video_watch_url
 from ..media import build_download_response, build_stream_response, get_authorized_video
 from ..thumbnails import generate_marker_frame, get_marker_frame_path, get_thumbnail_path
-from ..transcode import ensure_transcoded, needs_transcode
+from ..transcode import ensure_transcoded
 
 router = APIRouter(prefix="/api")
 
@@ -161,11 +161,10 @@ def api_stream_video(video_id: int, request: Request, user=Depends(require_api_t
     if not filepath.is_file():
         raise HTTPException(status_code=404, detail="Datei nicht (mehr) vorhanden.")
 
-    if needs_transcode(video["codec"], video["bit_rate"], video["width"]):
-        try:
-            filepath = ensure_transcoded(video_id, filepath)
-        except RuntimeError as exc:
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+    try:
+        filepath = ensure_transcoded(video_id, filepath)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return build_stream_response(filepath, request.headers.get("range"))
 

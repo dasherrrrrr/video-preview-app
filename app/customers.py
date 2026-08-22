@@ -13,7 +13,7 @@ from fastapi import HTTPException
 from .api_auth import generate_api_token, hash_token
 from .auth import hash_password
 from .database import get_db
-from .transcode import ensure_transcoded, get_cache_path, needs_transcode
+from .transcode import ensure_transcoded, get_cache_path
 
 VIDEOS_DIR = Path(os.environ.get("VIDEOS_DIR", "/videos"))
 
@@ -61,24 +61,24 @@ def set_permissions(user_id: int, video_ids: list[int]) -> None:
 
 
 def _transcode_in_background(video_ids: list[int]) -> None:
-    """Videos werden nicht mehr beim Katalog-Scan pauschal transkodiert
-    (bei zehntausenden Dateien viel zu teuer), sondern erst wenn sie einem
-    Kunden zugewiesen werden - genau dann werden sie tatsächlich gebraucht.
-    Läuft im Hintergrund-Thread, damit die Zuweisung selbst nicht auf
-    (ggf. viele) Transcodes warten muss; /api/stream transkodiert notfalls
-    trotzdem noch on-demand, falls ein Kunde das Video öffnet, bevor dieser
-    Hintergrund-Thread fertig ist."""
+    """Jedes einem Kunden zugewiesene Video wird auf das einheitliche
+    Vorschauformat (720p, ~6 Mbit/s) gebracht - unabhängig vom Quellformat,
+    siehe transcode.ensure_transcoded. Videos werden nicht mehr beim
+    Katalog-Scan pauschal transkodiert (bei zehntausenden Dateien viel zu
+    teuer), sondern erst wenn sie einem Kunden zugewiesen werden - genau dann
+    werden sie tatsächlich gebraucht. Läuft im Hintergrund-Thread, damit die
+    Zuweisung selbst nicht auf (ggf. viele) Transcodes warten muss;
+    /api/stream transkodiert notfalls trotzdem noch on-demand, falls ein
+    Kunde das Video öffnet, bevor dieser Hintergrund-Thread fertig ist."""
 
     def _run():
         with get_db() as conn:
             rows = conn.execute(
-                f"SELECT id, filepath, codec, bit_rate, width FROM videos WHERE id IN "
+                f"SELECT id, filepath FROM videos WHERE id IN "
                 f"({','.join('?' for _ in video_ids)})",
                 video_ids,
             ).fetchall()
         for row in rows:
-            if not needs_transcode(row["codec"], row["bit_rate"], row["width"]):
-                continue
             if get_cache_path(row["id"]).is_file():
                 continue
             try:

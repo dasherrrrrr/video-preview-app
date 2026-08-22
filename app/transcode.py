@@ -1,9 +1,12 @@
 """
-On-Demand-Transcoding für Codecs, die die meisten Browser nicht direkt abspielen
-(v.a. HEVC/H.265 der DJI-Drohne). Nutzt VAAPI für Hardware-Decode+Encode auf der
-Intel-GPU. Ergebnis landet im data/transcoded/-Cache (Teil des data-Volumes) -
-ein Video wird also nur beim allerersten Aufruf transkodiert, danach direkt
-aus dem Cache bedient.
+Vorschau-Transcoding: jedes Video, das einem Kunden zugewiesen wird, wird
+auf ein einheitliches Vorschauformat gebracht (720p, ~6 Mbit/s H.264) -
+unabhängig vom Quellcodec/-bitrate. Das sorgt für gleichmäßiges, planbares
+Abspielverhalten auf allen Geräten/Verbindungen und ist einfacher als eine
+Fallunterscheidung "brauchts überhaupt". Nutzt VAAPI für Hardware-Decode+
+Encode auf der Intel-GPU. Ergebnis landet im data/transcoded/-Cache (Teil
+des data-Volumes) - ein Video wird also nur beim allerersten Aufruf
+transkodiert, danach direkt aus dem Cache bedient.
 """
 
 import subprocess
@@ -11,28 +14,14 @@ from pathlib import Path
 
 from .database import DB_PATH
 
-# Codecs, die praktisch jeder Browser im <video>-Tag direkt abspielen kann -
-# alles andere (v.a. hevc/h265) wird vor der Auslieferung transkodiert.
-BROWSER_COMPATIBLE_CODECS = {"h264", "vp8", "vp9", "av1"}
+TRANSCODE_CACHE_DIR = DB_PATH.parent / "transcoded"
 
-# Manche Kamera-/Drohnen-Originale sind zwar H.264 ("browser-kompatibel"),
-# aber mit Bitraten von 100+ Mbit/s in 4K - das ruckelt auf praktisch jeder
-# Verbindung (Mobilfunk allemal, oft auch WLAN). Alles darüber wird trotz
-# kompatiblem Codec auf die Vorschau-Bitrate heruntertranskodiert.
-MAX_PASSTHROUGH_BIT_RATE = 8_000_000  # 8 Mbit/s
-MAX_PASSTHROUGH_WIDTH = 1920  # > Full HD wird heruntertranskodiert
+# Der Ziel-Pfad im Container ist immer fix - docker-compose.yml mappt die
+# tatsächliche GPU des Hosts (über VAAPI_DEVICE in .env) immer auf diesen Node.
+VAAPI_DEVICE = "/dev/dri/renderD128"
 
-
-def needs_transcode(codec: str | None, bit_rate: int | None = None, width: int | None = None) -> bool:
-    if not codec:
-        return False
-    if codec.lower() not in BROWSER_COMPATIBLE_CODECS:
-        return True
-    if bit_rate and bit_rate > MAX_PASSTHROUGH_BIT_RATE:
-        return True
-    if width and width > MAX_PASSTHROUGH_WIDTH:
-        return True
-    return False
+TARGET_BIT_RATE = "6M"
+TARGET_BUFSIZE = "12M"
 
 
 def get_cache_path(video_id: int) -> Path:
@@ -40,9 +29,10 @@ def get_cache_path(video_id: int) -> Path:
 
 
 def ensure_transcoded(video_id: int, source_path: Path) -> Path:
-    """Gibt den Pfad der H.264-Version zurück, transkodiert bei Bedarf zuerst.
-    Blockiert den aufrufenden Thread (FastAPI führt sync-Routen im Threadpool
-    aus, daher ist das für dieses Preview-App-Nutzungsmuster ok)."""
+    """Gibt den Pfad der 720p/6-Mbit-Vorschauversion zurück, transkodiert bei
+    Bedarf zuerst. Blockiert den aufrufenden Thread (FastAPI führt sync-Routen
+    im Threadpool aus, daher ist das für dieses Preview-App-Nutzungsmuster
+    ok)."""
     TRANSCODE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     dest_path = get_cache_path(video_id)
     if dest_path.is_file():
@@ -67,13 +57,12 @@ def ensure_transcoded(video_id: int, source_path: Path) -> Path:
         "-c:v", "h264_vaapi",
         "-profile:v", "main",  # breit kompatibles Profil (iOS/Safari-Hardwaredecode)
         "-level", "4.0",
-        "-qp", "24",  # konstante Qualität statt unbegrenzter Bitrate (sonst oft größer als Quelle)
-        # Ohne Bitrate-Deckel kann -qp bei bewegungsreichen Szenen (z.B.
-        # Drohnenaufnahmen) kurzzeitig auf Bitraten hochschnellen, die auf
-        # Mobilverbindungen zu Rucklern/Rebuffering führen - daher zusätzlich
-        # hart deckeln.
-        "-maxrate", "4M",
-        "-bufsize", "8M",
+        # Feste Ziel-Bitrate statt konstanter Qualität (-qp) - für ein
+        # einheitliches, vorhersagbares Vorschauformat über alle Videos
+        # hinweg, unabhängig vom Bewegungsanteil der Quelle.
+        "-b:v", TARGET_BIT_RATE,
+        "-maxrate", TARGET_BIT_RATE,
+        "-bufsize", TARGET_BUFSIZE,
         # Festes, kurzes Keyframe-Intervall (alle 2s bei 24fps) statt
         # VAAPI-Standard (oft deutlich länger) - sorgt für gleichmäßigeres
         # Rebuffering-Verhalten und schnelleres Seeking/Starten auf Mobilgeräten.

@@ -136,11 +136,10 @@ def init_db() -> None:
             conn,
             "videos",
             {
-                # Für die Transcode-Entscheidung: manche Kamera-/Drohnen-Originale
-                # sind zwar H.264 (also "browser-kompatibel"), aber mit Bitraten
-                # von 100+ Mbit/s in 4K - das ruckelt auf jeder normalen
-                # Verbindung. Werden zusätzlich zum Codec geprüft, siehe
-                # transcode.needs_transcode().
+                # Reine Katalog-Info (z.B. für die Admin-Ansicht) - für die
+                # Transcode-Entscheidung selbst ohne Belang, jedes zugewiesene
+                # Video wird einheitlich auf 720p/6 Mbit gebracht, siehe
+                # transcode.ensure_transcoded().
                 "bit_rate": "INTEGER",
                 "width": "INTEGER",
             },

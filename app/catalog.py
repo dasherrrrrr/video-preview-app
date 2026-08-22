@@ -19,12 +19,12 @@ VIDEO_EXTENSIONS = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v"}
 
 
 def _probe(filepath: Path) -> dict:
-    """Fragt Dauer, Video-Codec, Breite und Bitrate über ffprobe ab. Bitrate/
-    Breite werden zusätzlich zum Codec gebraucht, weil manche Kamera-/Drohnen-
-    Originale zwar H.264 ("browser-kompatibel") sind, aber mit Bitraten von
-    100+ Mbit/s in 4K - das ruckelt auf praktisch jeder Verbindung, siehe
-    transcode.needs_transcode(). Gibt leere Werte zurück, falls ffprobe die
-    Datei nicht lesen kann (z.B. kaputte/unvollständige Datei)."""
+    """Fragt Dauer, Video-Codec, Breite und Bitrate über ffprobe ab (Bitrate/
+    Breite sind reine Katalog-Info, für die Transcode-Entscheidung selbst
+    inzwischen ohne Belang - jedes zugewiesene Video wird einheitlich auf
+    720p/6 Mbit gebracht, siehe transcode.ensure_transcoded()). Gibt leere
+    Werte zurück, falls ffprobe die Datei nicht lesen kann (z.B. kaputte/
+    unvollständige Datei)."""
     try:
         result = subprocess.run(
             [

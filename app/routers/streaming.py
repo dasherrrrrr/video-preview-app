@@ -17,7 +17,7 @@ def thumbnail(video_id: int, user=Depends(require_login)):
     path = get_thumbnail_path(video_id)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Kein Vorschaubild vorhanden.")
-    return FileResponse(path, media_type="image/jpeg")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
 @router.get("/marker-frame/{marker_id}")
@@ -35,7 +35,7 @@ def marker_frame(marker_id: int, user=Depends(require_login)):
     path = get_marker_frame_path(marker_id)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Kein Frame für diesen Marker vorhanden.")
-    return FileResponse(path, media_type="image/jpeg")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
 @router.get("/stream/{video_id}")

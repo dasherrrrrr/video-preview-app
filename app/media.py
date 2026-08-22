@@ -69,7 +69,16 @@ def build_stream_response(
                 remaining -= len(chunk)
                 yield chunk
 
-    headers = {"Accept-Ranges": "bytes", "Content-Length": str(length)}
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(length),
+        # Ohne das cachen Browser Video-Byteranges nach eigenem Ermessen -
+        # wird die Datei hinter derselben URL später neu erzeugt (z.B. nach
+        # einem Transcode-Fix), bekommt man sonst weiter die alten,
+        # zwischengespeicherten Bytes ausgeliefert, ohne dass ein Reload das
+        # Video selbst neu lädt.
+        "Cache-Control": "no-store",
+    }
     if status_code == 206:
         headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
     if extra_headers:

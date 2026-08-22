@@ -2,6 +2,11 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Verhindert, dass apt-get bei Paketen mit Debconf-Rückfragen (z.B. Lizenz-
+# Dialoge in non-free-Paketen) im Build für immer auf eine Eingabe wartet,
+# die in einem Docker-Build nie kommt (kein TTY vorhanden).
+ENV DEBIAN_FRONTEND=noninteractive
+
 # ffprobe (Teil von ffmpeg) wird für den Katalog-Scan gebraucht, um Dauer
 # und Codec der Videodateien auszulesen. intel-media-va-driver-non-free liefert
 # den VAAPI-Treiber (iHD) für Hardware-Transcoding auf Intel-GPUs (z.B. Arc A380) -

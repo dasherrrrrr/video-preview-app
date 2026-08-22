@@ -20,8 +20,9 @@ TRANSCODE_CACHE_DIR = DB_PATH.parent / "transcoded"
 # tatsächliche GPU des Hosts (über VAAPI_DEVICE in .env) immer auf diesen Node.
 VAAPI_DEVICE = "/dev/dri/renderD128"
 
-TARGET_BIT_RATE = "12M"
+TARGET_MAX_BIT_RATE = "12M"
 TARGET_BUFSIZE = "24M"
+TARGET_QUALITY = 23  # ICQ: niedriger = bessere Qualität, ~18-28 ist der übliche Bereich
 
 
 def get_cache_path(video_id: int) -> Path:
@@ -65,11 +66,16 @@ def ensure_transcoded(video_id: int, source_path: Path) -> Path:
         "-c:v", "h264_vaapi",
         "-profile:v", "main",  # breit kompatibles Profil (iOS/Safari-Hardwaredecode)
         "-level", "4.1",  # deckt 1080p bei dieser Bitrate/Framerate sicher ab
-        # Feste Ziel-Bitrate statt konstanter Qualität (-qp) - für ein
-        # einheitliches, vorhersagbares Vorschauformat über alle Videos
-        # hinweg, unabhängig vom Bewegungsanteil der Quelle.
-        "-b:v", TARGET_BIT_RATE,
-        "-maxrate", TARGET_BIT_RATE,
+        # Qualitätsbasierte Ratensteuerung (ICQ) statt fester Ziel-Bitrate:
+        # bei fester Bitrate (-b:v) sichtbares Flimmern/Artefakte in
+        # bewegungsreichen/detailreichen Szenen, weil der Hardware-Encoder
+        # die Qualität dafür pro Frame runterregeln musste, um die Ziel-
+        # Bitrate zu halten. ICQ hält stattdessen die Qualität konstant und
+        # lässt die Bitrate je nach Szene schwanken - -maxrate/-bufsize
+        # bleiben als Deckel, damit sehr komplexe Szenen nicht ausufern.
+        "-rc_mode", "ICQ",
+        "-global_quality", str(TARGET_QUALITY),
+        "-maxrate", TARGET_MAX_BIT_RATE,
         "-bufsize", TARGET_BUFSIZE,
         # Festes, kurzes Keyframe-Intervall (alle 2s bei 24fps) statt
         # VAAPI-Standard (oft deutlich länger) - sorgt für gleichmäßigeres

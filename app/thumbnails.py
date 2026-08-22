@@ -26,13 +26,24 @@ def generate_marker_frame(marker_id: int, source_path: Path, timestamp_seconds: 
     eine Kreis-/Pfeil-Markierung tatsächlich bezieht (das Motiv kann sich bis
     dahin ja schon bewegt/geändert haben). Schlägt lautlos fehl (kein Bild),
     das Overlay fällt dann in der Vorlage auf das generische Thumbnail
-    zurück."""
+    zurück.
+
+    Zweistufiges Seeking: ein grobes -ss VOR -i (schnell, springt aber nur
+    zum nächsten Keyframe - bei Kamera-Originalen mit mehrsekündigen
+    Keyframe-Abständen kann das spürbar neben dem angeklickten Zeitpunkt
+    liegen) plus ein kleines, präzises -ss NACH -i (dekodiert die paar
+    Frames bis zum exakten Zeitpunkt) - liefert den exakten Frame, ohne bei
+    langen Videos vom Dateianfang an dekodieren zu müssen."""
     MARKER_FRAME_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     dest_path = get_marker_frame_path(marker_id)
+    target = max(timestamp_seconds, 0)
+    coarse_seek = max(target - 2.0, 0)
+    precise_seek = target - coarse_seek
     cmd = [
         "ffmpeg", "-y",
-        "-ss", str(max(timestamp_seconds, 0)),
+        "-ss", str(coarse_seek),
         "-i", str(source_path),
+        "-ss", str(precise_seek),
         "-frames:v", "1",
         "-vf", "scale=480:-1",
         "-q:v", "4",

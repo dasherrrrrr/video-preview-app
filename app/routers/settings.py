@@ -40,9 +40,9 @@ def show_settings(
     test_result: Optional[str] = None,
 ):
     return templates.TemplateResponse(
+        request,
         "admin_settings.html",
         {
-            "request": request,
             "user": admin,
             "settings": _current_settings(),
             "smtp_configured": is_configured(),

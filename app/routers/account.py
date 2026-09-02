@@ -19,8 +19,9 @@ CONTACT_SUCCESS = "Kontaktdaten gespeichert."
 def account(request: Request, user=Depends(require_login), success: Optional[str] = None):
     success_message = CONTACT_SUCCESS if success == "contact" else None
     return templates.TemplateResponse(
+        request,
         "account.html",
-        {"request": request, "user": user, "error": None, "success": success_message},
+        {"user": user, "error": None, "success": success_message},
     )
 
 
@@ -35,9 +36,9 @@ def update_contact(
     phone = phone.strip()
     if email and not EMAIL_RE.match(email):
         return templates.TemplateResponse(
+            request,
             "account.html",
             {
-                "request": request,
                 "user": user,
                 "error": "Bitte eine gültige E-Mail-Adresse angeben.",
                 "success": None,
@@ -70,8 +71,9 @@ def change_password(
 
     if error:
         return templates.TemplateResponse(
+            request,
             "account.html",
-            {"request": request, "user": user, "error": error, "success": None},
+            {"user": user, "error": error, "success": None},
             status_code=400,
         )
 
@@ -81,6 +83,7 @@ def change_password(
             (hash_password(new_password), user["id"]),
         )
     return templates.TemplateResponse(
+        request,
         "account.html",
-        {"request": request, "user": user, "error": None, "success": "Passwort geändert."},
+        {"user": user, "error": None, "success": "Passwort geändert."},
     )

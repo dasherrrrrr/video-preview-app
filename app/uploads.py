@@ -56,7 +56,9 @@ def get_upload_dir(upload_folder: str, create: bool = False) -> Path:
     nicht vom Kunden selbst - trotzdem wird auch hier gegen Pfad-Traversal
     abgesichert, statt dem Admin-Wert blind zu vertrauen."""
     base = (VIDEOS_RW_DIR / upload_folder / "upload").resolve()
-    if not str(base).startswith(str(VIDEOS_RW_DIR.resolve())):
+    try:
+        base.relative_to(VIDEOS_RW_DIR.resolve())
+    except ValueError:
         raise HTTPException(status_code=500, detail="Ungültiger Upload-Ordner konfiguriert.")
     if create:
         base.mkdir(parents=True, exist_ok=True)

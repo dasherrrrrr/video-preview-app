@@ -22,7 +22,7 @@ def login_form(request: Request):
     if get_current_user(request):
         return RedirectResponse(url="/", status_code=303)
     return templates.TemplateResponse(
-        "login.html", {"request": request, "error": None}
+        request, "login.html", {"error": None}
     )
 
 
@@ -33,8 +33,9 @@ def login_submit(
     user = get_user_by_username(username)
     if not user or not verify_password(password, user["password_hash"]):
         return templates.TemplateResponse(
+            request,
             "login.html",
-            {"request": request, "error": "Benutzername oder Passwort falsch."},
+            {"error": "Benutzername oder Passwort falsch."},
             status_code=401,
         )
     if not user["is_admin"]:
@@ -42,9 +43,9 @@ def login_submit(
         # Concorde/Lovable. Nur Admin-/Bearbeiter-Konten dürfen sich noch
         # direkt in der Video-Preview-App anmelden.
         return templates.TemplateResponse(
+            request,
             "login.html",
             {
-                "request": request,
                 "error": "Dieser Login ist nur für Admins. Bitte über Concorde anmelden.",
             },
             status_code=403,

@@ -58,9 +58,9 @@ def _fetch_editors():
 @router.get("/users")
 def list_users(request: Request, admin=Depends(require_admin), new_token: Optional[str] = None):
     return templates.TemplateResponse(
+        request,
         "admin_users.html",
         {
-            "request": request,
             "user": admin,
             "users": _fetch_users(),
             "editors": _fetch_editors(),
@@ -84,9 +84,9 @@ def create_user(
         ).fetchone()
         if existing:
             return templates.TemplateResponse(
+                request,
                 "admin_users.html",
                 {
-                    "request": request,
                     "user": admin,
                     "users": _fetch_users(),
                     "editors": _fetch_editors(),
@@ -112,9 +112,9 @@ def _fetch_videos():
 @router.get("/videos")
 def list_videos(request: Request, admin=Depends(require_admin), scan_result: Optional[str] = None):
     return templates.TemplateResponse(
+        request,
         "admin_videos.html",
         {
-            "request": request,
             "user": admin,
             "videos": _fetch_videos(),
             "scan_result": scan_result,
@@ -253,9 +253,9 @@ def edit_permissions(user_id: int, request: Request, admin=Depends(require_admin
         groups_by_folder[folder]["videos"].append(v)
 
     return templates.TemplateResponse(
+        request,
         "admin_permissions.html",
         {
-            "request": request,
             "user": admin,
             "target": target,
             "groups": groups,
@@ -290,9 +290,9 @@ def list_quota(request: Request, admin=Depends(require_admin)):
         if c["upload_folder"]
     }
     return templates.TemplateResponse(
+        request,
         "admin_quota.html",
         {
-            "request": request,
             "user": admin,
             "customers": customers,
             "usage_by_id": usage_by_id,
@@ -346,9 +346,9 @@ def video_detail(video_id: int, request: Request, admin=Depends(require_admin)):
             (video_id,),
         ).fetchall()
     return templates.TemplateResponse(
+        request,
         "admin_video_detail.html",
         {
-            "request": request,
             "user": admin,
             "video": video,
             "markers": [_marker_row_to_dict(m) for m in markers],
@@ -392,6 +392,7 @@ def list_all_markers(request: Request, admin=Depends(require_admin)):
             "ORDER BY v.filepath, u.username, m.timestamp_seconds"
         ).fetchall()
     return templates.TemplateResponse(
+        request,
         "admin_markers.html",
-        {"request": request, "user": admin, "markers": [_marker_row_to_dict(m) for m in markers]},
+        {"user": admin, "markers": [_marker_row_to_dict(m) for m in markers]},
     )

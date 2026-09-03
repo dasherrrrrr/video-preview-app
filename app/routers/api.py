@@ -14,8 +14,8 @@ from ..api_auth import require_api_token
 from ..catalog import VIDEOS_DIR
 from ..database import get_db
 from ..mailer import send_email, video_watch_url
-from ..media import build_download_response, build_stream_response, get_authorized_video
-from ..thumbnails import generate_marker_frame, get_marker_frame_path, get_thumbnail_path
+from ..media import build_download_response, build_stream_response, get_authorized_photo, get_authorized_video
+from ..thumbnails import generate_marker_frame, get_marker_frame_path, get_photo_thumbnail_path, get_thumbnail_path
 from ..transcode import ensure_transcoded
 
 router = APIRouter(prefix="/api")
@@ -178,6 +178,55 @@ def api_download_video(video_id: int, user=Depends(require_api_token)):
     if not filepath.is_file():
         raise HTTPException(status_code=404, detail="Datei nicht (mehr) vorhanden.")
     return build_download_response(filepath, Path(video["filepath"]).name)
+
+
+def _photo_to_dict(photo) -> dict:
+    return {
+        "id": photo["id"],
+        "title": photo["title"],
+        "width": photo["width"],
+        "height": photo["height"],
+        "thumbnail_url": f"/api/photo-thumbnail/{photo['id']}",
+        "photo_url": f"/api/photo/{photo['id']}",
+        "download_url": f"/api/photo/{photo['id']}",
+    }
+
+
+@router.get("/photos")
+def list_photos(user=Depends(require_api_token)):
+    with get_db() as conn:
+        if user["is_admin"]:
+            photos = conn.execute(
+                "SELECT id, title, width, height FROM photos ORDER BY filepath"
+            ).fetchall()
+        else:
+            photos = conn.execute(
+                "SELECT ph.id, ph.title, ph.width, ph.height "
+                "FROM photos ph JOIN photo_permissions pp ON pp.photo_id = ph.id "
+                "WHERE pp.user_id = ? ORDER BY ph.filepath",
+                (user["id"],),
+            ).fetchall()
+    return [_photo_to_dict(p) for p in photos]
+
+
+@router.get("/photo-thumbnail/{photo_id}")
+def api_photo_thumbnail(photo_id: int, user=Depends(require_api_token)):
+    get_authorized_photo(photo_id, user)
+    path = get_photo_thumbnail_path(photo_id)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Kein Vorschaubild vorhanden.")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+@router.get("/photo/{photo_id}")
+def api_photo(photo_id: int, user=Depends(require_api_token)):
+    """Liefert das Originalfoto in voller Auflösung - dient sowohl als
+    Anzeige- als auch als Download-URL (Bilder werden nicht transkodiert)."""
+    photo = get_authorized_photo(photo_id, user)
+    filepath = VIDEOS_DIR / photo["filepath"]
+    if not filepath.is_file():
+        raise HTTPException(status_code=404, detail="Datei nicht (mehr) vorhanden.")
+    return FileResponse(filepath, headers={"Cache-Control": "no-store"})
 
 
 @router.post("/videos/{video_id}/markers")

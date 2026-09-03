@@ -36,6 +36,24 @@ def get_authorized_video(video_id: int, user):
     return video
 
 
+def get_authorized_photo(photo_id: int, user):
+    with get_db() as conn:
+        photo = conn.execute(
+            "SELECT id, filepath, title, width, height FROM photos WHERE id = ?",
+            (photo_id,),
+        ).fetchone()
+        if not photo:
+            raise HTTPException(status_code=404, detail="Foto nicht gefunden.")
+        if not user["is_admin"]:
+            allowed = conn.execute(
+                "SELECT 1 FROM photo_permissions WHERE user_id = ? AND photo_id = ?",
+                (user["id"], photo_id),
+            ).fetchone()
+            if not allowed:
+                raise HTTPException(status_code=403, detail="Kein Zugriff auf dieses Foto.")
+    return photo
+
+
 def build_stream_response(
     filepath: Path, range_header: Optional[str], extra_headers: Optional[dict] = None
 ) -> StreamingResponse:

@@ -9,10 +9,36 @@ from .database import DB_PATH
 
 THUMBNAIL_CACHE_DIR = DB_PATH.parent / "thumbnails"
 MARKER_FRAME_CACHE_DIR = DB_PATH.parent / "marker_frames"
+PHOTO_THUMBNAIL_CACHE_DIR = DB_PATH.parent / "photo_thumbnails"
 
 
 def get_thumbnail_path(video_id: int) -> Path:
     return THUMBNAIL_CACHE_DIR / f"{video_id}.jpg"
+
+
+def get_photo_thumbnail_path(photo_id: int) -> Path:
+    return PHOTO_THUMBNAIL_CACHE_DIR / f"{photo_id}.jpg"
+
+
+def generate_photo_thumbnail(photo_id: int, source_path: Path) -> None:
+    """Schreibt eine verkleinerte JPEG-Vorschau eines Fotos - dieselbe
+    ffmpeg-basierte Herangehensweise wie bei Video-Thumbnails, funktioniert
+    auch für Bilddateien (auch HEIC/HEIF von iPhones). Schlägt lautlos fehl
+    (kein Bild), falls ffmpeg die Datei nicht lesen kann."""
+    PHOTO_THUMBNAIL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    dest_path = get_photo_thumbnail_path(photo_id)
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", str(source_path),
+        "-frames:v", "1",
+        "-vf", "scale=480:-1",
+        "-q:v", "4",
+        str(dest_path),
+    ]
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, timeout=30)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        dest_path.unlink(missing_ok=True)
 
 
 def get_marker_frame_path(marker_id: int) -> Path:

@@ -90,6 +90,17 @@ def _transcode_in_background(video_ids: list[int]) -> None:
         threading.Thread(target=_run, daemon=True).start()
 
 
+def set_photo_permissions(user_id: int, photo_ids: list[int]) -> None:
+    """Analog zu set_permissions für Videos - Fotos brauchen kein Transcoding,
+    daher kein Hintergrund-Thread nötig."""
+    with get_db() as conn:
+        conn.execute("DELETE FROM photo_permissions WHERE user_id = ?", (user_id,))
+        conn.executemany(
+            "INSERT INTO photo_permissions (user_id, photo_id) VALUES (?, ?)",
+            [(user_id, photo_id) for photo_id in photo_ids],
+        )
+
+
 def set_upload_folder(user_id: int, folder: str | None) -> None:
     """Setzt den Ordner (relativ zu VIDEOS_DIR), in dem dieser Kunde per
     /api/upload Dateien hochladen darf - siehe app/uploads.py. None/leer

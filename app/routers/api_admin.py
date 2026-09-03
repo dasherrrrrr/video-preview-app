@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from ..api_auth import require_api_admin
-from ..catalog import scan_library, scan_photos
+from ..catalog import ensure_photo_folders, scan_library, scan_photos
 from ..customers import (
     create_customer,
     generate_token_for_user,
@@ -40,6 +40,10 @@ class VideoAssignment(BaseModel):
 
 class PhotoAssignment(BaseModel):
     photo_ids: list[int]
+
+
+class PhotoFolders(BaseModel):
+    folders: list[str]
 
 
 class UploadFolderUpdate(BaseModel):
@@ -125,18 +129,35 @@ def assign_videos(user_id: int, payload: VideoAssignment, admin=Depends(require_
     return {"video_ids": payload.video_ids}
 
 
+@router.post("/photo-folders")
+def create_photo_folders(payload: PhotoFolders, admin=Depends(require_api_admin)):
+    """Erstellt je Kunden-Videoordner den Unterordner `fotos` im Archiv."""
+    try:
+        return {"folders": ensure_photo_folders(payload.folders)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("/photo-catalog")
-def list_photo_catalog(admin=Depends(require_api_admin)):
-    """Der Archiv-Ordnerbaum enthält gemischt Kundenfotos und alles Mögliche
-    andere (siehe MIN_PHOTO_DIMENSION in catalog.py) - welcher Ordner
-    tatsächlich zu einem Kunden gehört, entscheidet Concorde selbst, indem es
-    die Fotos hier nach `folder` gruppiert anzeigt statt sich auf eine
-    Namenskonvention zu verlassen (die im bestehenden Archiv nicht einheitlich
-    ist - mal 'Fotos', mal 'Fotogalerie', mal 'Finale Fotos', ...)."""
+def list_photo_catalog(folder: list[str] = Query(default=[]), admin=Depends(require_api_admin)):
+    """Liefert nur Fotos aus den angefragten, kundenbezogenen Fotoordnern.
+
+    Ohne Filter bleibt der Endpunkt aus Kompatibilitätsgründen vollständig;
+    Concorde verwendet immer mindestens einen `folder`-Filter.
+    """
     with get_db() as conn:
-        rows = conn.execute(
-            "SELECT id, title, filepath, width, height FROM photos ORDER BY filepath"
-        ).fetchall()
+        folders = [f.strip().strip("/") for f in folder if f.strip().strip("/")]
+        if folders:
+            conditions = " OR ".join("(filepath = ? OR filepath LIKE ?)" for _ in folders)
+            params = [value for f in folders for value in (f, f"{f}/%")]
+            rows = conn.execute(
+                f"SELECT id, title, filepath, width, height FROM photos WHERE {conditions} ORDER BY filepath",
+                params,
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, title, filepath, width, height FROM photos ORDER BY filepath"
+            ).fetchall()
     result = []
     for r in rows:
         d = dict(r)

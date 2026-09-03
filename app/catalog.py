@@ -31,9 +31,33 @@ from .transcode import get_cache_path as get_transcode_cache_path
 _scan_lock = threading.Lock()
 
 VIDEOS_DIR = Path(os.environ.get("VIDEOS_DIR", "/videos"))
+# Der eigentliche Archiv-Mount bleibt bewusst read-only. Nur zum Anlegen der
+# kundenbezogenen Fotos-Ordner nutzen wir den zweiten, beschreibbaren Mount
+# desselben Host-Verzeichnisses.
+VIDEOS_WRITE_DIR = Path(os.environ.get("VIDEOS_WRITE_DIR", "/videos-rw"))
 
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v"}
 PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp", ".tif", ".tiff"}
+
+
+def ensure_photo_folders(folders: list[str]) -> list[str]:
+    """Legt sichere, relative Kunden-Fotoordner im beschreibbaren Archiv-Mount an.
+
+    Die Ordnernamen stammen aus Concordes Video-Ordnerzuordnung und werden
+    trotzdem strikt gegen absolute Pfade und Traversal geprüft.
+    """
+    root = VIDEOS_WRITE_DIR.resolve()
+    created: list[str] = []
+    for folder in folders:
+        rel = Path(folder.strip().strip("/"))
+        if not folder or rel.is_absolute() or any(part in {"", ".", ".."} for part in rel.parts):
+            raise ValueError("Ungültiger Foto-Ordnerpfad.")
+        target = (root / rel).resolve()
+        if target != root and root not in target.parents:
+            raise ValueError("Ungültiger Foto-Ordnerpfad.")
+        target.mkdir(parents=True, exist_ok=True)
+        created.append(str(rel))
+    return created
 
 # Der Archiv-Ordnerbaum enthält neben echten Kundenfotos auch jede Menge
 # Icons/Logos/Screenshots (Software-Assets, interne Dokumente) - alles unter

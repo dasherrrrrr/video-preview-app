@@ -20,6 +20,7 @@ services:
       # gesetzten Wert fällt main.py auf einen Zufalls-Key pro Neustart zurück.
       - SESSION_SECRET=${SESSION_SECRET:-}
       - VIDEOS_DIR=/videos
+      - VIDEOS_WRITE_DIR=/videos-rw
       - PYTHONUNBUFFERED=1
       - VAAPI_DEVICE=${VAAPI_DEVICE:-/dev/dri/renderD128}
       - SMTP_HOST=${SMTP_HOST:-}

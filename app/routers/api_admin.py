@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from ..api_auth import require_api_admin
-from ..catalog import ensure_photo_folders, scan_library, scan_photos
+from ..catalog import ensure_photo_folders, scan_library, scan_photo_folders, scan_photos
 from ..customers import (
     create_customer,
     generate_token_for_user,
@@ -134,6 +134,18 @@ def create_photo_folders(payload: PhotoFolders, admin=Depends(require_api_admin)
     """Erstellt je Kunden-Videoordner den Unterordner `fotos` im Archiv."""
     try:
         return {"folders": ensure_photo_folders(payload.folders)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/photo-scan")
+def scan_customer_photo_folders(payload: PhotoFolders, admin=Depends(require_api_admin)):
+    """Scannt nur die explizit übergebenen Kunden-Fotoordner."""
+    try:
+        folders = ensure_photo_folders(payload.folders)
+        if not folders:
+            raise ValueError("Mindestens ein Foto-Ordner muss angegeben werden.")
+        return scan_photo_folders(folders)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

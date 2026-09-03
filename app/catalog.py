@@ -279,7 +279,18 @@ def scan_photos() -> dict:
         return _scan_photos_impl()
 
 
-def _scan_photos_impl() -> dict:
+def scan_photo_folders(folders: list[str]) -> dict:
+    """Scannt nur explizite Kunden-Fotoordner.
+
+    Anders als der vollständige Scan werden nur Katalogeinträge unter diesen
+    Pfaden aktualisiert oder bei gelöschten Dateien entfernt. Dadurch kann ein
+    Kunden-Scan weder andere Kunden noch das restliche Archiv beeinflussen.
+    """
+    with _scan_lock:
+        return _scan_photos_impl(folders)
+
+
+def _scan_photos_impl(folders: list[str] | None = None) -> dict:
     """Läuft durch VIDEOS_DIR (derselbe Archiv-Ordnerbaum wie bei den Videos -
     Foto- und Videomaterial liegt dort gemischt in denselben Projektordnern),
     legt neue Fotos in der DB an und entfernt Einträge für gelöschte Dateien.
@@ -289,53 +300,79 @@ def _scan_photos_impl() -> dict:
     skipped_existing = 0
     ignored_small = 0
 
+    if folders is not None and not [f for f in folders if f.strip().strip("/")]:
+        return {"added": 0, "removed": 0, "unchanged": 0, "ignored_small": 0}
+
     conn = get_connection()
     try:
+        normalized_folders = [f.strip().strip("/") for f in (folders or []) if f.strip().strip("/")]
+        scan_roots = [VIDEOS_DIR]
+        if folders is not None:
+            root = VIDEOS_DIR.resolve()
+            scan_roots = []
+            for folder in normalized_folders:
+                rel = Path(folder)
+                if rel.is_absolute() or any(part in {"", ".", ".."} for part in rel.parts):
+                    raise ValueError("Ungültiger Foto-Ordnerpfad.")
+                target = (root / rel).resolve()
+                if target != root and root not in target.parents:
+                    raise ValueError("Ungültiger Foto-Ordnerpfad.")
+                if target.is_dir():
+                    scan_roots.append(target)
+
         if VIDEOS_DIR.is_dir():
             processed = 0
-            for path in sorted(VIDEOS_DIR.rglob("*")):
-                if not path.is_file() or path.suffix.lower() not in PHOTO_EXTENSIONS:
-                    continue
-                rel_path = str(path.relative_to(VIDEOS_DIR))
-                found_paths.add(rel_path)
+            for scan_root in scan_roots:
+                for path in sorted(scan_root.rglob("*")):
+                    if not path.is_file() or path.suffix.lower() not in PHOTO_EXTENSIONS:
+                        continue
+                    rel_path = str(path.relative_to(VIDEOS_DIR))
+                    found_paths.add(rel_path)
 
-                existing = conn.execute(
-                    "SELECT id, width, height FROM photos WHERE filepath = ?", (rel_path,)
-                ).fetchone()
-                if existing:
-                    if _is_too_small(existing["width"], existing["height"]):
-                        # War vor Einführung von MIN_PHOTO_DIMENSION schon
-                        # katalogisiert (z.B. ein Icon/Logo) - jetzt bereinigen.
-                        conn.execute("DELETE FROM photos WHERE id = ?", (existing["id"],))
-                        get_photo_thumbnail_path(existing["id"]).unlink(missing_ok=True)
-                        found_paths.discard(rel_path)
-                        ignored_small += 1
-                    else:
-                        skipped_existing += 1
-                        if not get_photo_thumbnail_path(existing["id"]).is_file():
-                            generate_photo_thumbnail(existing["id"], path)
-                else:
-                    meta = _probe_photo(path)
-                    if _is_too_small(meta["width"], meta["height"]):
-                        found_paths.discard(rel_path)
-                        ignored_small += 1
-                    else:
-                        try:
-                            cursor = conn.execute(
-                                "INSERT INTO photos (filepath, title, width, height) VALUES (?, ?, ?, ?)",
-                                (rel_path, path.stem, meta["width"], meta["height"]),
-                            )
-                        except sqlite3.IntegrityError:
-                            skipped_existing += 1
+                    existing = conn.execute(
+                        "SELECT id, width, height FROM photos WHERE filepath = ?", (rel_path,)
+                    ).fetchone()
+                    if existing:
+                        if _is_too_small(existing["width"], existing["height"]):
+                            # War vor Einführung von MIN_PHOTO_DIMENSION schon
+                            # katalogisiert (z.B. ein Icon/Logo) - jetzt bereinigen.
+                            conn.execute("DELETE FROM photos WHERE id = ?", (existing["id"],))
+                            get_photo_thumbnail_path(existing["id"]).unlink(missing_ok=True)
+                            found_paths.discard(rel_path)
+                            ignored_small += 1
                         else:
-                            generate_photo_thumbnail(cursor.lastrowid, path)
-                            added += 1
+                            skipped_existing += 1
+                            if not get_photo_thumbnail_path(existing["id"]).is_file():
+                                generate_photo_thumbnail(existing["id"], path)
+                    else:
+                        meta = _probe_photo(path)
+                        if _is_too_small(meta["width"], meta["height"]):
+                            found_paths.discard(rel_path)
+                            ignored_small += 1
+                        else:
+                            try:
+                                cursor = conn.execute(
+                                    "INSERT INTO photos (filepath, title, width, height) VALUES (?, ?, ?, ?)",
+                                    (rel_path, path.stem, meta["width"], meta["height"]),
+                                )
+                            except sqlite3.IntegrityError:
+                                skipped_existing += 1
+                            else:
+                                generate_photo_thumbnail(cursor.lastrowid, path)
+                                added += 1
 
-                processed += 1
-                if processed % COMMIT_EVERY == 0:
-                    conn.commit()
+                    processed += 1
+                    if processed % COMMIT_EVERY == 0:
+                        conn.commit()
 
-        existing_rows = conn.execute("SELECT id, filepath FROM photos").fetchall()
+        if normalized_folders:
+            conditions = " OR ".join("(filepath = ? OR filepath LIKE ?)" for _ in normalized_folders)
+            params = [value for folder in normalized_folders for value in (folder, f"{folder}/%")]
+            existing_rows = conn.execute(
+                f"SELECT id, filepath FROM photos WHERE {conditions}", params
+            ).fetchall()
+        else:
+            existing_rows = conn.execute("SELECT id, filepath FROM photos").fetchall()
         removed = 0
         for row in existing_rows:
             if row["filepath"] not in found_paths:

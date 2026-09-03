@@ -19,6 +19,19 @@ def get_connection() -> sqlite3.Connection:
     # (z.B. row["username"]) statt nur per Index (row[0])
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    # WAL statt des Standard-Rollback-Journals: Lesende Verbindungen (z.B. ein
+    # Kunde, der gerade streamt) werden dann nicht mehr blockiert, während ein
+    # Katalog-Scan im Hintergrund eine länger offene Schreib-Transaktion hält
+    # (siehe catalog.py - eine Verbindung pro ganzem Scan-Lauf statt pro
+    # Datei). Ohne WAL führte genau das zu "database is locked"-Fehlern bei
+    # gleichzeitigen Requests. Wird beim ersten Connect dauerhaft in der
+    # Datenbankdatei gesetzt, ist danach ein No-Op.
+    conn.execute("PRAGMA journal_mode = WAL")
+    # Zusätzliche Absicherung: falls doch mal zwei Schreib-Transaktionen
+    # kollidieren (WAL erlaubt weiterhin nur einen Schreiber gleichzeitig),
+    # 10 Sekunden auf den Lock warten statt sofort mit OperationalError
+    # abzubrechen.
+    conn.execute("PRAGMA busy_timeout = 10000")
     return conn
 
 
@@ -110,6 +123,25 @@ def init_db() -> None:
                 token_hash TEXT UNIQUE NOT NULL,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 last_used_at TEXT
+            );
+
+            -- Fotokatalog, analog zu videos: scan_photos() (siehe catalog.py)
+            -- hält diese Tabelle mit dem Dateisystem synchron.
+            CREATE TABLE IF NOT EXISTS photos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                filepath TEXT UNIQUE NOT NULL,
+                title TEXT NOT NULL,
+                width INTEGER,
+                height INTEGER,
+                added_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            -- Welcher User welches Foto sehen darf (n:m-Beziehung, analog zu
+            -- permissions für Videos).
+            CREATE TABLE IF NOT EXISTS photo_permissions (
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                photo_id INTEGER NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+                PRIMARY KEY (user_id, photo_id)
             );
             """
         )

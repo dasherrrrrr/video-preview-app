@@ -12,12 +12,13 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from ..api_auth import require_api_admin
-from ..catalog import scan_library
+from ..catalog import scan_library, scan_photos
 from ..customers import (
     create_customer,
     generate_token_for_user,
     revoke_token_for_user,
     set_permissions,
+    set_photo_permissions,
     set_upload_folder,
     set_upload_quota,
 )
@@ -35,6 +36,10 @@ class CustomerCreate(BaseModel):
 
 class VideoAssignment(BaseModel):
     video_ids: list[int]
+
+
+class PhotoAssignment(BaseModel):
+    photo_ids: list[int]
 
 
 class UploadFolderUpdate(BaseModel):
@@ -120,6 +125,43 @@ def assign_videos(user_id: int, payload: VideoAssignment, admin=Depends(require_
     return {"video_ids": payload.video_ids}
 
 
+@router.get("/photo-catalog")
+def list_photo_catalog(admin=Depends(require_api_admin)):
+    """Der Archiv-Ordnerbaum enthält gemischt Kundenfotos und alles Mögliche
+    andere (siehe MIN_PHOTO_DIMENSION in catalog.py) - welcher Ordner
+    tatsächlich zu einem Kunden gehört, entscheidet Concorde selbst, indem es
+    die Fotos hier nach `folder` gruppiert anzeigt statt sich auf eine
+    Namenskonvention zu verlassen (die im bestehenden Archiv nicht einheitlich
+    ist - mal 'Fotos', mal 'Fotogalerie', mal 'Finale Fotos', ...)."""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, title, filepath, width, height FROM photos ORDER BY filepath"
+        ).fetchall()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["folder"] = d["filepath"].rsplit("/", 1)[0] if "/" in d["filepath"] else ""
+        result.append(d)
+    return result
+
+
+@router.get("/customers/{user_id}/photos")
+def get_customer_photos(user_id: int, admin=Depends(require_api_admin)):
+    _fetch_customer_or_404(user_id)
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT photo_id FROM photo_permissions WHERE user_id = ?", (user_id,)
+        ).fetchall()
+    return {"photo_ids": [r["photo_id"] for r in rows]}
+
+
+@router.put("/customers/{user_id}/photos")
+def assign_photos(user_id: int, payload: PhotoAssignment, admin=Depends(require_api_admin)):
+    _fetch_customer_or_404(user_id)
+    set_photo_permissions(user_id, payload.photo_ids)
+    return {"photo_ids": payload.photo_ids}
+
+
 @router.put("/customers/{user_id}/upload-folder")
 def update_customer_upload_folder(user_id: int, payload: UploadFolderUpdate, admin=Depends(require_api_admin)):
     """Legt fest, in welchem Ordner (relativ zum Videoverzeichnis, z.B. die
@@ -156,12 +198,19 @@ def get_customer_upload_usage(user_id: int, admin=Depends(require_api_admin)):
 @router.post("/scan")
 def scan_catalog(admin=Depends(require_api_admin)):
     """Liest das Videoverzeichnis neu ein (neue Dateien aufnehmen, gelöschte
-    entfernen) und transkodiert neue Videos direkt vor. Kann bei vielen neuen
-    Videos länger dauern (jedes wird einmal komplett transkodiert) - der
-    Request läuft so lange synchron, ein Reverse-Proxy mit kurzem Timeout
-    könnte die Verbindung vorher kappen. Der Scan läuft serverseitig aber
-    trotzdem zu Ende, auch wenn der Concorde-Request währenddessen abbricht."""
-    return scan_library()
+    entfernen) - Video- und Fotodateien liegen gemischt im selben Ordnerbaum,
+    daher läuft hier auch gleich der Fotokatalog-Scan mit. Kann bei vielen
+    neuen Dateien länger dauern - der Request läuft so lange synchron, ein
+    Reverse-Proxy mit kurzem Timeout könnte die Verbindung vorher kappen.
+    Der Scan läuft serverseitig aber trotzdem zu Ende, auch wenn der
+    Concorde-Request währenddessen abbricht."""
+    result = scan_library()
+    photo_result = scan_photos()
+    result["photos_added"] = photo_result["added"]
+    result["photos_removed"] = photo_result["removed"]
+    result["photos_unchanged"] = photo_result["unchanged"]
+    result["photos_ignored_small"] = photo_result["ignored_small"]
+    return result
 
 
 @router.post("/incidents")

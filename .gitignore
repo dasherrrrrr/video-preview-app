@@ -1,9 +1,14 @@
 __pycache__/
 *.pyc
 data/app.db
+data/app.db-shm
+data/app.db-wal
 data/transcoded/
 data/thumbnails/
 data/branding/
+data/marker_frames/
+data/photo_thumbnails/
+db-backups/
 .venv/
 .claude/settings.local.json
 .env

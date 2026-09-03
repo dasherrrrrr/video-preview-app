@@ -6,16 +6,57 @@ kein zusätzliches Python-Paket nötig, ffprobe wird als Subprozess aufgerufen.
 
 import json
 import os
+import sqlite3
 import subprocess
+import threading
 from pathlib import Path
 
-from .database import get_db
-from .thumbnails import generate_thumbnail, get_marker_frame_path, get_thumbnail_path
+from .database import get_connection
+from .thumbnails import (
+    generate_photo_thumbnail,
+    generate_thumbnail,
+    get_marker_frame_path,
+    get_photo_thumbnail_path,
+    get_thumbnail_path,
+)
 from .transcode import get_cache_path as get_transcode_cache_path
+
+# Verhindert, dass zwei Scans gleichzeitig laufen (z.B. weil ein Client nach
+# einem 504-Timeout des Reverse-Proxys den Scan für erneut fehlgeschlagen
+# hält und ihn nochmal auslöst, während der ursprüngliche Request serverseitig
+# unbeeindruckt weiterläuft - die Scan-Funktionen selbst laufen synchron zu
+# Ende, egal ob der ursprüngliche Client noch verbunden ist). Ohne diese
+# Sperre versuchen beide Durchläufe dieselbe neu gefundene Datei einzutragen
+# und der zweite crasht mit einem UNIQUE-constraint-Fehler.
+_scan_lock = threading.Lock()
 
 VIDEOS_DIR = Path(os.environ.get("VIDEOS_DIR", "/videos"))
 
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v"}
+PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp", ".tif", ".tiff"}
+
+# Der Archiv-Ordnerbaum enthält neben echten Kundenfotos auch jede Menge
+# Icons/Logos/Screenshots (Software-Assets, interne Dokumente) - alles unter
+# dieser Kantenlänge (Breite UND Höhe) ist praktisch nie ein echtes Foto und
+# wird beim Scan ignoriert. Reine Auflösungs-Heuristik, kein Ordner-Filter -
+# welcher Ordner tatsächlich Kundenfotos enthält, wählt der Admin selbst aus
+# (siehe folder-Feld in api_admin.list_photo_catalog).
+MIN_PHOTO_DIMENSION = 200
+
+# Wie oft während eines Scans committed wird (siehe _scan_library_impl/
+# _scan_photos_impl) - eine Verbindung für den ganzen Scan statt einer neuen
+# SQLite-Verbindung pro Datei (bei >100.000 Dateien war allein das Öffnen/
+# Schließen einer Verbindung pro Datei der dominierende Zeitfaktor, nicht
+# ffprobe). Bewusst klein gehalten: jede offene Schreib-Transaktion blockiert
+# unter WAL zwar keine Leser, aber sehr wohl andere Schreiber - und
+# api_auth.require_api_token schreibt bei JEDER Token-Anfrage (last_used_at),
+# ist also selbst ein Schreiber. Ein zu hoher Wert hier führte zu
+# "database is locked" für praktisch jeden Concorde-Request während eines
+# laufenden Scans. Bei 10 bleibt die Schreibsperre pro Commit-Fenster kurz
+# genug, dass busy_timeout (siehe database.get_connection) sie zuverlässig
+# überbrückt, während trotzdem nur 1/10 der ursprünglichen Verbindungen
+# geöffnet werden muss.
+COMMIT_EVERY = 10
 
 
 def _probe(filepath: Path) -> dict:
@@ -77,6 +118,13 @@ def _probe(filepath: Path) -> dict:
 
 
 def scan_library() -> dict:
+    """Öffentlicher Einstiegspunkt - siehe _scan_lock oben, warum das nicht
+    einfach die Scan-Logik selbst ist."""
+    with _scan_lock:
+        return _scan_library_impl()
+
+
+def _scan_library_impl() -> dict:
     """Läuft durch VIDEOS_DIR, legt neue Videos in der DB an, probet sie mit
     ffprobe und entfernt DB-Einträge für Dateien, die nicht mehr existieren.
     Gibt eine Zusammenfassung zurück (für die Admin-Oberfläche)."""
@@ -84,14 +132,16 @@ def scan_library() -> dict:
     added = 0
     skipped_existing = 0
 
-    if VIDEOS_DIR.is_dir():
-        for path in sorted(VIDEOS_DIR.rglob("*")):
-            if not path.is_file() or path.suffix.lower() not in VIDEO_EXTENSIONS:
-                continue
-            rel_path = str(path.relative_to(VIDEOS_DIR))
-            found_paths.add(rel_path)
+    conn = get_connection()
+    try:
+        if VIDEOS_DIR.is_dir():
+            processed = 0
+            for path in sorted(VIDEOS_DIR.rglob("*")):
+                if not path.is_file() or path.suffix.lower() not in VIDEO_EXTENSIONS:
+                    continue
+                rel_path = str(path.relative_to(VIDEOS_DIR))
+                found_paths.add(rel_path)
 
-            with get_db() as conn:
                 existing = conn.execute(
                     "SELECT id, duration_seconds, bit_rate FROM videos WHERE filepath = ?", (rel_path,)
                 ).fetchone()
@@ -107,21 +157,30 @@ def scan_library() -> dict:
                             "UPDATE videos SET bit_rate = ?, width = ? WHERE id = ?",
                             (meta["bit_rate"], meta["width"], existing["id"]),
                         )
-                    continue
+                else:
+                    meta = _probe(path)
+                    try:
+                        cursor = conn.execute(
+                            "INSERT INTO videos (filepath, title, duration_seconds, codec, bit_rate, width) "
+                            "VALUES (?, ?, ?, ?, ?, ?)",
+                            (rel_path, path.stem, meta["duration_seconds"], meta["codec"], meta["bit_rate"], meta["width"]),
+                        )
+                    except sqlite3.IntegrityError:
+                        # Sollte dank _scan_lock nicht mehr vorkommen, bleibt aber
+                        # als zweite Absicherung stehen statt den ganzen Scan
+                        # abzubrechen.
+                        skipped_existing += 1
+                    else:
+                        generate_thumbnail(cursor.lastrowid, path, meta["duration_seconds"])
+                        added += 1
 
-                meta = _probe(path)
-                cursor = conn.execute(
-                    "INSERT INTO videos (filepath, title, duration_seconds, codec, bit_rate, width) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
-                    (rel_path, path.stem, meta["duration_seconds"], meta["codec"], meta["bit_rate"], meta["width"]),
-                )
-                generate_thumbnail(cursor.lastrowid, path, meta["duration_seconds"])
-                added += 1
+                processed += 1
+                if processed % COMMIT_EVERY == 0:
+                    conn.commit()
 
-    with get_db() as conn:
-        existing = conn.execute("SELECT id, filepath FROM videos").fetchall()
+        existing_rows = conn.execute("SELECT id, filepath FROM videos").fetchall()
         removed = 0
-        for row in existing:
+        for row in existing_rows:
             if row["filepath"] not in found_paths:
                 marker_ids = [
                     m["id"]
@@ -135,6 +194,9 @@ def scan_library() -> dict:
                 for marker_id in marker_ids:
                     get_marker_frame_path(marker_id).unlink(missing_ok=True)
                 removed += 1
+        conn.commit()
+    finally:
+        conn.close()
 
     # Transkodiert wird absichtlich nicht mehr hier: bei mehreren tausend
     # Dateien in der Bibliothek wäre das Vortranskodieren aller Videos beim
@@ -149,4 +211,120 @@ def scan_library() -> dict:
         "unchanged": skipped_existing,
         "transcoded": 0,
         "transcode_failed": 0,
+    }
+
+
+def _probe_photo(filepath: Path) -> dict:
+    """Fragt Breite/Höhe über ffprobe ab (funktioniert auch für Bilddateien -
+    ffprobe behandelt ein Einzelbild wie ein Ein-Frame-Video). Gibt leere
+    Werte zurück, falls die Datei nicht lesbar ist (z.B. kaputt/unvollständig)."""
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v", "error",
+                "-select_streams", "v:0",
+                "-show_entries", "stream=width,height",
+                "-of", "json",
+                str(filepath),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=True,
+        )
+        data = json.loads(result.stdout)
+        streams = data.get("streams", [])
+        if streams:
+            return {"width": streams[0].get("width"), "height": streams[0].get("height")}
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError, json.JSONDecodeError):
+        pass
+    return {"width": None, "height": None}
+
+
+def _is_too_small(width, height) -> bool:
+    """Siehe MIN_PHOTO_DIMENSION - unbekannte Maße (ffprobe konnte die Datei
+    nicht lesen) gelten bewusst nicht als 'zu klein', damit im Zweifel lieber
+    zu viel als zu wenig katalogisiert wird."""
+    return width is not None and height is not None and width < MIN_PHOTO_DIMENSION and height < MIN_PHOTO_DIMENSION
+
+
+def scan_photos() -> dict:
+    """Öffentlicher Einstiegspunkt - siehe _scan_lock oben."""
+    with _scan_lock:
+        return _scan_photos_impl()
+
+
+def _scan_photos_impl() -> dict:
+    """Läuft durch VIDEOS_DIR (derselbe Archiv-Ordnerbaum wie bei den Videos -
+    Foto- und Videomaterial liegt dort gemischt in denselben Projektordnern),
+    legt neue Fotos in der DB an und entfernt Einträge für gelöschte Dateien.
+    Analog zu _scan_library_impl()."""
+    found_paths = set()
+    added = 0
+    skipped_existing = 0
+    ignored_small = 0
+
+    conn = get_connection()
+    try:
+        if VIDEOS_DIR.is_dir():
+            processed = 0
+            for path in sorted(VIDEOS_DIR.rglob("*")):
+                if not path.is_file() or path.suffix.lower() not in PHOTO_EXTENSIONS:
+                    continue
+                rel_path = str(path.relative_to(VIDEOS_DIR))
+                found_paths.add(rel_path)
+
+                existing = conn.execute(
+                    "SELECT id, width, height FROM photos WHERE filepath = ?", (rel_path,)
+                ).fetchone()
+                if existing:
+                    if _is_too_small(existing["width"], existing["height"]):
+                        # War vor Einführung von MIN_PHOTO_DIMENSION schon
+                        # katalogisiert (z.B. ein Icon/Logo) - jetzt bereinigen.
+                        conn.execute("DELETE FROM photos WHERE id = ?", (existing["id"],))
+                        get_photo_thumbnail_path(existing["id"]).unlink(missing_ok=True)
+                        found_paths.discard(rel_path)
+                        ignored_small += 1
+                    else:
+                        skipped_existing += 1
+                        if not get_photo_thumbnail_path(existing["id"]).is_file():
+                            generate_photo_thumbnail(existing["id"], path)
+                else:
+                    meta = _probe_photo(path)
+                    if _is_too_small(meta["width"], meta["height"]):
+                        found_paths.discard(rel_path)
+                        ignored_small += 1
+                    else:
+                        try:
+                            cursor = conn.execute(
+                                "INSERT INTO photos (filepath, title, width, height) VALUES (?, ?, ?, ?)",
+                                (rel_path, path.stem, meta["width"], meta["height"]),
+                            )
+                        except sqlite3.IntegrityError:
+                            skipped_existing += 1
+                        else:
+                            generate_photo_thumbnail(cursor.lastrowid, path)
+                            added += 1
+
+                processed += 1
+                if processed % COMMIT_EVERY == 0:
+                    conn.commit()
+
+        existing_rows = conn.execute("SELECT id, filepath FROM photos").fetchall()
+        removed = 0
+        for row in existing_rows:
+            if row["filepath"] not in found_paths:
+                conn.execute("DELETE FROM photos WHERE id = ?", (row["id"],))
+                get_photo_thumbnail_path(row["id"]).unlink(missing_ok=True)
+                removed += 1
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {
+        "added": added,
+        "removed": removed,
+        "unchanged": skipped_existing,
+        "ignored_small": ignored_small,
     }

@@ -62,6 +62,11 @@ class MarkerCreate(BaseModel):
     drawing: list[DrawingShape] | None = Field(default=None, max_length=MAX_DRAWING_SHAPES)
 
 
+class PhotoMarkerCreate(BaseModel):
+    label: str
+    drawing: list[DrawingShape] = Field(min_length=1, max_length=MAX_DRAWING_SHAPES)
+
+
 class CommentCreate(BaseModel):
     body: str
 
@@ -192,6 +197,28 @@ def _photo_to_dict(photo) -> dict:
     }
 
 
+@router.get("/photos/{photo_id}")
+def photo_detail(photo_id: int, user=Depends(require_api_token)):
+    photo = get_authorized_photo(photo_id, user)
+    with get_db() as conn:
+        comments = conn.execute(
+            "SELECT c.id, c.body, c.created_at, u.username "
+            "FROM photo_comments c JOIN users u ON u.id = c.user_id "
+            "WHERE c.photo_id = ? ORDER BY c.created_at",
+            (photo_id,),
+        ).fetchall()
+        markers = conn.execute(
+            "SELECT id, label, drawing, created_at FROM photo_markers "
+            "WHERE user_id = ? AND photo_id = ? ORDER BY created_at",
+            (user["id"], photo_id),
+        ).fetchall()
+    return {
+        **_photo_to_dict(photo),
+        "comments": [dict(c) for c in comments],
+        "markers": [_marker_to_dict(m) for m in markers],
+    }
+
+
 @router.get("/photos")
 def list_photos(user=Depends(require_api_token)):
     with get_db() as conn:
@@ -227,6 +254,59 @@ def api_photo(photo_id: int, user=Depends(require_api_token)):
     if not filepath.is_file():
         raise HTTPException(status_code=404, detail="Datei nicht (mehr) vorhanden.")
     return FileResponse(filepath, headers={"Cache-Control": "no-store"})
+
+
+@router.post("/photos/{photo_id}/markers")
+def create_photo_marker(photo_id: int, payload: PhotoMarkerCreate, user=Depends(require_api_token)):
+    get_authorized_photo(photo_id, user)
+    label = payload.label.strip()
+    if not label:
+        raise HTTPException(status_code=400, detail="Markierungen brauchen eine Beschreibung.")
+    drawing_json = json.dumps([shape.model_dump(exclude_none=True) for shape in payload.drawing])
+    with get_db() as conn:
+        cursor = conn.execute(
+            "INSERT INTO photo_markers (user_id, photo_id, label, drawing) VALUES (?, ?, ?, ?)",
+            (user["id"], photo_id, label, drawing_json),
+        )
+    return {"id": cursor.lastrowid, "label": label, "drawing": json.loads(drawing_json)}
+
+
+@router.delete("/photo-markers/{marker_id}")
+def delete_photo_marker(marker_id: int, user=Depends(require_api_token)):
+    with get_db() as conn:
+        marker = conn.execute(
+            "SELECT id FROM photo_markers WHERE id = ? AND user_id = ?", (marker_id, user["id"])
+        ).fetchone()
+        if not marker:
+            raise HTTPException(status_code=404, detail="Markierung nicht gefunden.")
+        conn.execute("DELETE FROM photo_markers WHERE id = ?", (marker_id,))
+    return {"ok": True}
+
+
+@router.post("/photos/{photo_id}/comments")
+def create_photo_comment(photo_id: int, payload: CommentCreate, user=Depends(require_api_token)):
+    photo = get_authorized_photo(photo_id, user)
+    body = payload.body.strip()
+    if not body:
+        raise HTTPException(status_code=400, detail="Kommentar darf nicht leer sein.")
+    with get_db() as conn:
+        cursor = conn.execute(
+            "INSERT INTO photo_comments (user_id, photo_id, body) VALUES (?, ?, ?)",
+            (user["id"], photo_id, body),
+        )
+    return {"id": cursor.lastrowid, "body": body, "user_id": user["id"]}
+
+
+@router.delete("/photo-comments/{comment_id}")
+def delete_photo_comment(comment_id: int, user=Depends(require_api_token)):
+    with get_db() as conn:
+        comment = conn.execute("SELECT id, user_id FROM photo_comments WHERE id = ?", (comment_id,)).fetchone()
+        if not comment:
+            raise HTTPException(status_code=404, detail="Kommentar nicht gefunden.")
+        if comment["user_id"] != user["id"] and not user["is_admin"]:
+            raise HTTPException(status_code=403, detail="Kein Zugriff auf diesen Kommentar.")
+        conn.execute("DELETE FROM photo_comments WHERE id = ?", (comment_id,))
+    return {"ok": True}
 
 
 @router.post("/videos/{video_id}/markers")

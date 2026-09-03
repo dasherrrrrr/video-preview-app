@@ -143,6 +143,26 @@ def init_db() -> None:
                 photo_id INTEGER NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
                 PRIMARY KEY (user_id, photo_id)
             );
+
+            -- Feedback zu Fotos, analog zu Video-Markern/-Kommentaren.
+            -- Markierungen sind pro Kunden-API-Identität, Kommentare sind für
+            -- alle Zugriffsberechtigten des Fotos sichtbar.
+            CREATE TABLE IF NOT EXISTS photo_markers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                photo_id INTEGER NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+                label TEXT NOT NULL,
+                drawing TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS photo_comments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                photo_id INTEGER NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+                body TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
             """
         )
         _migrate_add_columns(

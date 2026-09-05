@@ -31,6 +31,7 @@ ALLOWED_EXTENSIONS = {
     # Videos
     ".mp4", ".mov", ".m4v", ".avi", ".webm", ".mkv",
 }
+PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif"}
 
 
 def _sanitize_filename(filename: str) -> str:
@@ -56,6 +57,18 @@ def get_upload_dir(upload_folder: str, create: bool = False) -> Path:
     nicht vom Kunden selbst - trotzdem wird auch hier gegen Pfad-Traversal
     abgesichert, statt dem Admin-Wert blind zu vertrauen."""
     base = (VIDEOS_RW_DIR / upload_folder / "upload").resolve()
+    try:
+        base.relative_to(VIDEOS_RW_DIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=500, detail="Ungültiger Upload-Ordner konfiguriert.")
+    if create:
+        base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
+def get_photo_upload_dir(upload_folder: str, create: bool = False) -> Path:
+    """Foto-Uploads liegen im Fotoarchiv des Kunden, nicht im allgemeinen Upload."""
+    base = (VIDEOS_RW_DIR / upload_folder / "fotos" / "uploads").resolve()
     try:
         base.relative_to(VIDEOS_RW_DIR.resolve())
     except ValueError:
@@ -105,6 +118,24 @@ def save_upload(upload_folder: str, filename: str, content: bytes, quota_bytes: 
             i += 1
     target.write_bytes(content)
     return {"filename": target.name, "size_bytes": len(content)}
+
+
+def save_photo_upload(upload_folder: str, filename: str, content: bytes, quota_bytes: int | None = None) -> dict:
+    safe_name = _sanitize_filename(filename)
+    if Path(safe_name).suffix.lower() not in PHOTO_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Für die Fotogalerie sind nur Bilddateien erlaubt.")
+    usage = get_quota_usage(upload_folder, quota_bytes)
+    if usage["used_bytes"] + len(content) > usage["quota_bytes"]:
+        raise HTTPException(status_code=400, detail="Kontingent überschritten.")
+    target = get_photo_upload_dir(upload_folder, create=True) / safe_name
+    if target.exists():
+        stem, ext = target.stem, target.suffix
+        i = 2
+        while target.exists():
+            target = target.with_name(f"{stem}_{i}{ext}")
+            i += 1
+    target.write_bytes(content)
+    return {"filename": target.name, "size_bytes": len(content), "filepath": f"{upload_folder}/fotos/uploads/{target.name}"}
 
 
 def delete_upload(upload_folder: str, filename: str) -> None:

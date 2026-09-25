@@ -12,7 +12,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from ..api_auth import require_api_admin
-from ..catalog import ensure_photo_folders, scan_library, scan_photo_folders, scan_photos
+from ..catalog import ensure_photo_folders, scan_photo_folders
+from ..scan_jobs import get_scan_status, start_scan
 from ..customers import (
     create_customer,
     generate_token_for_user,
@@ -230,20 +231,22 @@ def get_customer_upload_usage(user_id: int, admin=Depends(require_api_admin)):
 
 @router.post("/scan")
 def scan_catalog(admin=Depends(require_api_admin)):
-    """Liest das Videoverzeichnis neu ein (neue Dateien aufnehmen, gelöschte
-    entfernen) - Video- und Fotodateien liegen gemischt im selben Ordnerbaum,
-    daher läuft hier auch gleich der Fotokatalog-Scan mit. Kann bei vielen
-    neuen Dateien länger dauern - der Request läuft so lange synchron, ein
-    Reverse-Proxy mit kurzem Timeout könnte die Verbindung vorher kappen.
-    Der Scan läuft serverseitig aber trotzdem zu Ende, auch wenn der
-    Concorde-Request währenddessen abbricht."""
-    result = scan_library()
-    photo_result = scan_photos()
-    result["photos_added"] = photo_result["added"]
-    result["photos_removed"] = photo_result["removed"]
-    result["photos_unchanged"] = photo_result["unchanged"]
-    result["photos_ignored_small"] = photo_result["ignored_small"]
-    return result
+    """Startet den Video- und Foto-Katalog-Scan im Hintergrund.
+
+    Der Medien-Mount kann sehr viele Dateien enthalten. Der HTTP-Aufruf
+    bestätigt deshalb nur den Start; den Fortschritt liefert
+    ``GET /api/admin/scan/status``.
+    """
+    return start_scan()
+
+
+@router.get("/scan/status")
+def scan_catalog_status(
+    job_id: str | None = Query(default=None),
+    admin=Depends(require_api_admin),
+):
+    """Liefert den Status des zuletzt gestarteten Katalog-Scans."""
+    return get_scan_status(job_id)
 
 
 @router.post("/incidents")

@@ -153,14 +153,22 @@ def _scan_library_impl() -> dict:
     ffprobe und entfernt DB-Einträge für Dateien, die nicht mehr existieren.
     Gibt eine Zusammenfassung zurück (für die Admin-Oberfläche)."""
     found_paths = set()
+    found_folders = set()
     added = 0
     skipped_existing = 0
+    folders_scanned = False
 
     conn = get_connection()
     try:
         if VIDEOS_DIR.is_dir():
+            folders_scanned = True
             processed = 0
             for path in sorted(VIDEOS_DIR.rglob("*")):
+                if path.is_dir():
+                    rel_folder = str(path.relative_to(VIDEOS_DIR))
+                    if rel_folder and rel_folder != ".":
+                        found_folders.add(rel_folder)
+                    continue
                 if not path.is_file() or path.suffix.lower() not in VIDEO_EXTENSIONS:
                     continue
                 rel_path = str(path.relative_to(VIDEOS_DIR))
@@ -202,6 +210,18 @@ def _scan_library_impl() -> dict:
                 if processed % COMMIT_EVERY == 0:
                     conn.commit()
 
+            # Ordner werden bewusst separat vom Video-Katalog gespeichert.
+            # So bleiben auch Verzeichnisse ohne Video (z.B. Audio, Rohmaterial
+            # oder ein frisch angelegter Kundenordner) in der Auswahl sichtbar.
+            # Nur nach einem erfolgreich begonnenen vollständigen Mount-Scan
+            # wird die bisherige Ordnerliste ersetzt; bei einem fehlenden Mount
+            # bleibt der letzte bekannte Stand erhalten.
+            conn.execute("DELETE FROM media_folders")
+            conn.executemany(
+                "INSERT INTO media_folders (path) VALUES (?)",
+                ((folder,) for folder in sorted(found_folders)),
+            )
+
         existing_rows = conn.execute("SELECT id, filepath FROM videos").fetchall()
         removed = 0
         for row in existing_rows:
@@ -235,6 +255,7 @@ def _scan_library_impl() -> dict:
         "unchanged": skipped_existing,
         "transcoded": 0,
         "transcode_failed": 0,
+        "folders": len(found_folders) if folders_scanned else None,
     }
 
 

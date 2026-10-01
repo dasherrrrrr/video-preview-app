@@ -113,6 +113,20 @@ def list_catalog(admin=Depends(require_api_admin)):
     return [dict(r) for r in rows]
 
 
+@router.get("/folders")
+def list_folders(admin=Depends(require_api_admin)):
+    """Liefert den zuletzt erfolgreich synchronisierten Verzeichnisbaum.
+
+    Dieser Endpunkt ist absichtlich vom Videokatalog getrennt: Ein Ordner
+    kann bereits auswählbar sein, obwohl er noch keine Videodatei enthält.
+    """
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT path FROM media_folders ORDER BY path"
+        ).fetchall()
+    return [row["path"] for row in rows]
+
+
 @router.get("/customers/{user_id}/videos")
 def get_customer_videos(user_id: int, admin=Depends(require_api_admin)):
     _fetch_customer_or_404(user_id)

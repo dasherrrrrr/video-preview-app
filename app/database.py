@@ -70,6 +70,15 @@ def init_db() -> None:
                 added_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
 
+            -- Alle Verzeichnisse des Medien-Mounts, nicht nur Ordner mit
+            -- bereits katalogisierten Videos. Der Admin kann dadurch auch
+            -- neu angelegte/leere Kundenordner auswählen (z.B. bevor die
+            -- ersten Videos hochgeladen wurden).
+            CREATE TABLE IF NOT EXISTS media_folders (
+                path TEXT PRIMARY KEY,
+                scanned_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
             -- Welcher User welches Video sehen darf (n:m-Beziehung)
             CREATE TABLE IF NOT EXISTS permissions (
                 user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

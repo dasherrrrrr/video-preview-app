@@ -40,10 +40,12 @@ def get_scan_status(job_id: str | None = None) -> dict:
     return state
 
 
-def _run_scan(job_id: str) -> None:
+def _run_scan(job_id: str, folders: list[str] | None = None) -> None:
     try:
-        result = scan_library()
-        photo_result = scan_photos()
+        result = scan_library(folders)
+        # Bei einem gezielten Video-Scan werden Fotos separat über den
+        # kundenspezifischen Foto-Scan aktualisiert.
+        photo_result = scan_photos() if folders is None else {"added": 0, "removed": 0, "unchanged": 0, "ignored_small": 0}
         result["photos_added"] = photo_result["added"]
         result["photos_removed"] = photo_result["removed"]
         result["photos_unchanged"] = photo_result["unchanged"]
@@ -74,7 +76,7 @@ def _run_scan(job_id: str) -> None:
         )
 
 
-def start_scan() -> dict:
+def start_scan(folders: list[str] | None = None) -> dict:
     with _lock:
         if _state["status"] == "running":
             return deepcopy(_state)
@@ -90,5 +92,5 @@ def start_scan() -> dict:
                 "error": None,
             }
         )
-    threading.Thread(target=_run_scan, args=(job_id,), name="video-library-scan", daemon=True).start()
+    threading.Thread(target=_run_scan, args=(job_id, folders), name="video-library-scan", daemon=True).start()
     return get_scan_status(job_id)

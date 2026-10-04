@@ -141,11 +141,11 @@ def _probe(filepath: Path) -> dict:
     }
 
 
-def scan_library() -> dict:
+def scan_library(folders: list[str] | None = None) -> dict:
     """Öffentlicher Einstiegspunkt - siehe _scan_lock oben, warum das nicht
     einfach die Scan-Logik selbst ist."""
     with _scan_lock:
-        return _scan_library_impl()
+        return _scan_library_scoped(folders) if folders else _scan_library_impl()
 
 
 def _scan_library_impl() -> dict:
@@ -256,6 +256,110 @@ def _scan_library_impl() -> dict:
         "transcoded": 0,
         "transcode_failed": 0,
         "folders": len(found_folders) if folders_scanned else None,
+    }
+
+
+def _scan_library_scoped(folders: list[str]) -> dict:
+    """Aktualisiert nur die angegebenen Kundenordner.
+
+    Das ist die schnelle Variante für die Admin-Ansicht: neue Exporte werden
+    sofort katalogisiert, ohne den kompletten Medien-Mount erneut zu prüfen.
+    """
+    normalized = [f.strip().strip("/") for f in folders if f and f.strip().strip("/")]
+    if not normalized:
+        return {"added": 0, "removed": 0, "unchanged": 0, "transcoded": 0, "transcode_failed": 0, "folders": 0}
+
+    root = VIDEOS_DIR.resolve()
+    scan_roots: list[Path] = []
+    valid_prefixes: list[str] = []
+    for folder in normalized:
+        rel = Path(folder)
+        if rel.is_absolute() or any(part in {"", ".", ".."} for part in rel.parts):
+            raise ValueError("Ungültiger Video-Ordnerpfad.")
+        target = (root / rel).resolve()
+        if target != root and root not in target.parents:
+            raise ValueError("Ungültiger Video-Ordnerpfad.")
+        if target.is_dir():
+            scan_roots.append(target)
+            valid_prefixes.append(str(rel).replace("\\", "/"))
+
+    if not scan_roots:
+        return {"added": 0, "removed": 0, "unchanged": 0, "transcoded": 0, "transcode_failed": 0, "folders": 0}
+
+    found_paths: set[str] = set()
+    found_folders: set[str] = set(valid_prefixes)
+    added = 0
+    unchanged = 0
+    conn = get_connection()
+    try:
+        processed = 0
+        for scan_root in scan_roots:
+            for path in sorted(scan_root.rglob("*")):
+                if path.is_dir():
+                    found_folders.add(str(path.relative_to(VIDEOS_DIR)).replace("\\", "/"))
+                    continue
+                if not path.is_file() or path.suffix.lower() not in VIDEO_EXTENSIONS:
+                    continue
+                rel_path = str(path.relative_to(VIDEOS_DIR)).replace("\\", "/")
+                found_paths.add(rel_path)
+                existing = conn.execute(
+                    "SELECT id, duration_seconds, bit_rate FROM videos WHERE filepath = ?", (rel_path,)
+                ).fetchone()
+                if existing:
+                    unchanged += 1
+                    if not get_thumbnail_path(existing["id"]).is_file():
+                        generate_thumbnail(existing["id"], path, existing["duration_seconds"])
+                    if existing["bit_rate"] is None:
+                        meta = _probe(path)
+                        conn.execute(
+                            "UPDATE videos SET bit_rate = ?, width = ? WHERE id = ?",
+                            (meta["bit_rate"], meta["width"], existing["id"]),
+                        )
+                else:
+                    meta = _probe(path)
+                    cursor = conn.execute(
+                        "INSERT INTO videos (filepath, title, duration_seconds, codec, bit_rate, width) "
+                        "VALUES (?, ?, ?, ?, ?, ?)",
+                        (rel_path, path.stem, meta["duration_seconds"], meta["codec"], meta["bit_rate"], meta["width"]),
+                    )
+                    generate_thumbnail(cursor.lastrowid, path, meta["duration_seconds"])
+                    added += 1
+                processed += 1
+                if processed % COMMIT_EVERY == 0:
+                    conn.commit()
+
+        conditions = " OR ".join("(filepath = ? OR filepath LIKE ?)" for _ in valid_prefixes)
+        params = [value for prefix in valid_prefixes for value in (prefix, f"{prefix}/%")]
+        existing_rows = conn.execute(f"SELECT id, filepath FROM videos WHERE {conditions}", params).fetchall()
+        removed = 0
+        for row in existing_rows:
+            if row["filepath"] not in found_paths:
+                marker_ids = [m["id"] for m in conn.execute("SELECT id FROM markers WHERE video_id = ?", (row["id"],)).fetchall()]
+                conn.execute("DELETE FROM videos WHERE id = ?", (row["id"],))
+                get_thumbnail_path(row["id"]).unlink(missing_ok=True)
+                get_transcode_cache_path(row["id"]).unlink(missing_ok=True)
+                for marker_id in marker_ids:
+                    get_marker_frame_path(marker_id).unlink(missing_ok=True)
+                removed += 1
+
+        existing_folders = conn.execute("SELECT path FROM media_folders").fetchall()
+        kept = [
+            row["path"] for row in existing_folders
+            if not any(row["path"] == prefix or row["path"].startswith(prefix + "/") for prefix in valid_prefixes)
+        ]
+        conn.execute("DELETE FROM media_folders")
+        conn.executemany("INSERT INTO media_folders (path) VALUES (?)", ((p,) for p in sorted(set(kept) | found_folders)))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {
+        "added": added,
+        "removed": removed,
+        "unchanged": unchanged,
+        "transcoded": 0,
+        "transcode_failed": 0,
+        "folders": len(found_folders),
     }
 
 

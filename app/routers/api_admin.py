@@ -47,6 +47,11 @@ class PhotoFolders(BaseModel):
     folders: list[str]
 
 
+class ScanRequest(BaseModel):
+    # Leer/fehlend = kompletter Archivscan; gesetzt = nur diese Kundenwurzeln.
+    folders: list[str] | None = None
+
+
 class UploadFolderUpdate(BaseModel):
     upload_folder: str | None = None
 
@@ -244,14 +249,14 @@ def get_customer_upload_usage(user_id: int, admin=Depends(require_api_admin)):
 
 
 @router.post("/scan")
-def scan_catalog(admin=Depends(require_api_admin)):
+def scan_catalog(payload: ScanRequest | None = None, admin=Depends(require_api_admin)):
     """Startet den Video- und Foto-Katalog-Scan im Hintergrund.
 
     Der Medien-Mount kann sehr viele Dateien enthalten. Der HTTP-Aufruf
     bestätigt deshalb nur den Start; den Fortschritt liefert
     ``GET /api/admin/scan/status``.
     """
-    return start_scan()
+    return start_scan(payload.folders if payload else None)
 
 
 @router.get("/scan/status")

@@ -152,6 +152,12 @@ def _scan_library_impl() -> dict:
     """Läuft durch VIDEOS_DIR, legt neue Videos in der DB an, probet sie mit
     ffprobe und entfernt DB-Einträge für Dateien, die nicht mehr existieren.
     Gibt eine Zusammenfassung zurück (für die Admin-Oberfläche)."""
+    # Ein nicht eingehängter SMB/NFS-Mount darf niemals als leeres Archiv
+    # interpretiert werden. Andernfalls würde der Aufräumloop alle vorhandenen
+    # Katalogeinträge als entfernt markieren.
+    if not VIDEOS_DIR.is_dir():
+        raise RuntimeError("Medien-Mount ist nicht erreichbar; Katalog bleibt unverändert.")
+
     found_paths = set()
     found_folders = set()
     added = 0
@@ -223,6 +229,10 @@ def _scan_library_impl() -> dict:
             )
 
         existing_rows = conn.execute("SELECT id, filepath FROM videos").fetchall()
+        # Auch ein vorhandener, aber kurzfristig leer gelieferter Mount darf
+        # keinen destruktiven Komplettabgleich auslösen.
+        if existing_rows and not found_paths:
+            raise RuntimeError("Medien-Mount lieferte keine Dateien; Katalog bleibt unverändert.")
         removed = 0
         for row in existing_rows:
             if row["filepath"] not in found_paths:
@@ -428,6 +438,14 @@ def _scan_photos_impl(folders: list[str] | None = None) -> dict:
     if folders is not None and not [f for f in folders if f.strip().strip("/")]:
         return {"added": 0, "removed": 0, "unchanged": 0, "ignored_small": 0}
 
+    # Bei einem globalen Fotoscan ist ein fehlender Mount ein harter Fehler.
+    # Bei einem gezielten Kundenscan bleibt ein noch nicht angelegter Ordner
+    # dagegen ein gültiger leerer Zustand und darf nichts löschen.
+    if not VIDEOS_DIR.is_dir():
+        if folders is None:
+            raise RuntimeError("Medien-Mount ist nicht erreichbar; Fotokatalog bleibt unverändert.")
+        return {"added": 0, "removed": 0, "unchanged": 0, "ignored_small": 0}
+
     conn = get_connection()
     try:
         normalized_folders = [f.strip().strip("/") for f in (folders or []) if f.strip().strip("/")]
@@ -444,6 +462,11 @@ def _scan_photos_impl(folders: list[str] | None = None) -> dict:
                     raise ValueError("Ungültiger Foto-Ordnerpfad.")
                 if target.is_dir():
                     scan_roots.append(target)
+
+            # Ein konfigurierter Kundenordner, der noch nicht existiert, ist
+            # leer, aber kein Anlass, alte Fotos aus dem Katalog zu entfernen.
+            if not scan_roots:
+                return {"added": 0, "removed": 0, "unchanged": 0, "ignored_small": 0}
 
         if VIDEOS_DIR.is_dir():
             processed = 0

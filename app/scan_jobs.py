@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 import threading
 import uuid
 
-from .catalog import scan_library, scan_photos
+from .catalog import scan_library, scan_photos, scan_photo_folders
 
 
 _lock = threading.Lock()
@@ -45,7 +45,7 @@ def _run_scan(job_id: str, folders: list[str] | None = None) -> None:
         result = scan_library(folders)
         # Bei einem gezielten Video-Scan werden Fotos separat über den
         # kundenspezifischen Foto-Scan aktualisiert.
-        photo_result = scan_photos() if folders is None else {"added": 0, "removed": 0, "unchanged": 0, "ignored_small": 0}
+        photo_result = scan_photos() if folders is None else scan_photo_folders(folders)
         result["photos_added"] = photo_result["added"]
         result["photos_removed"] = photo_result["removed"]
         result["photos_unchanged"] = photo_result["unchanged"]

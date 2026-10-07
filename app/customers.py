@@ -6,6 +6,7 @@ erzeugen) ausführen kann wie ein Admin direkt in dieser App."""
 import os
 import secrets
 import threading
+import json
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -13,7 +14,7 @@ from fastapi import HTTPException
 from .api_auth import generate_api_token, hash_token
 from .auth import hash_password
 from .database import get_db
-from .transcode import ensure_transcoded, get_cache_path
+from .transcode import ensure_transcoded
 
 VIDEOS_DIR = Path(os.environ.get("VIDEOS_DIR", "/videos"))
 
@@ -79,8 +80,6 @@ def _transcode_in_background(video_ids: list[int]) -> None:
                 video_ids,
             ).fetchall()
         for row in rows:
-            if get_cache_path(row["id"]).is_file():
-                continue
             try:
                 ensure_transcoded(row["id"], VIDEOS_DIR / row["filepath"])
             except RuntimeError:
@@ -120,4 +119,18 @@ def set_upload_quota(user_id: int, quota_bytes: int | None) -> None:
         conn.execute(
             "UPDATE users SET upload_quota_bytes = ? WHERE id = ?",
             (quota_bytes if quota_bytes and quota_bytes > 0 else None, user_id),
+        )
+
+
+def set_photo_folders(user_id: int, folders: list[str]) -> None:
+    """Setzt die relativen Archivordner, aus denen der Kunde Fotos sehen darf."""
+    normalized: list[str] = []
+    for folder in folders:
+        value = folder.strip().strip("/")
+        if value and value not in normalized:
+            normalized.append(value)
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE users SET photo_folders = ? WHERE id = ?",
+            (json.dumps(normalized, ensure_ascii=False), user_id),
         )

@@ -9,6 +9,7 @@ des data-Volumes) - ein Video wird also nur beim allerersten Aufruf
 transkodiert, danach direkt aus dem Cache bedient.
 """
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -29,6 +30,36 @@ def get_cache_path(video_id: int) -> Path:
     return TRANSCODE_CACHE_DIR / f"{video_id}.mp4"
 
 
+def get_cache_metadata_path(video_id: int) -> Path:
+    """Sidecar mit der Quellversion, aus der der Proxy erzeugt wurde."""
+    return TRANSCODE_CACHE_DIR / f"{video_id}.json"
+
+
+def _source_signature(source_path: Path) -> dict[str, int]:
+    stat = source_path.stat()
+    return {
+        "size": int(stat.st_size),
+        "mtime_ns": int(stat.st_mtime_ns),
+        "inode": int(getattr(stat, "st_ino", 0)),
+    }
+
+
+def _cache_matches_source(cache_path: Path, metadata_path: Path, source_path: Path) -> bool:
+    """Prüft, ob ein vorhandener Proxy zur aktuellen Quelldatei gehört.
+
+    Alte Proxies ohne Sidecar werden einmalig neu erzeugt. Danach reicht der
+    sehr günstige Größen-/mtime-/Inode-Vergleich statt eines vollständigen
+    Hashes über mehrere Terabytes Archivmaterial.
+    """
+    if not cache_path.is_file() or not metadata_path.is_file():
+        return False
+    try:
+        cached = json.loads(metadata_path.read_text(encoding="utf-8"))
+        return cached == _source_signature(source_path)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return False
+
+
 def ensure_transcoded(video_id: int, source_path: Path) -> Path:
     """Gibt den Pfad der 1080p/12-Mbit-Vorschauversion zurück, transkodiert bei
     Bedarf zuerst. Blockiert den aufrufenden Thread (FastAPI führt sync-Routen
@@ -36,12 +67,19 @@ def ensure_transcoded(video_id: int, source_path: Path) -> Path:
     ok)."""
     TRANSCODE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     dest_path = get_cache_path(video_id)
-    if dest_path.is_file():
+    metadata_path = get_cache_metadata_path(video_id)
+    source_signature = _source_signature(source_path)
+    if _cache_matches_source(dest_path, metadata_path, source_path):
         return dest_path
+    # Veraltete/halb fertige Caches vor dem Neuaufbau entfernen. Das ist auch
+    # der Pfad für ältere Proxies, die noch keinen Sidecar besitzen.
+    dest_path.unlink(missing_ok=True)
+    metadata_path.unlink(missing_ok=True)
 
     # In eine .tmp-Datei schreiben und erst am Ende umbenennen, damit ein
     # abgebrochener Transcode nie eine halbfertige Datei als "fertig" ausgibt.
     tmp_path = dest_path.with_suffix(".tmp.mp4")
+    metadata_tmp_path = metadata_path.with_suffix(".tmp.json")
     cmd = [
         "ffmpeg", "-y",
         "-hwaccel", "vaapi",
@@ -91,10 +129,13 @@ def ensure_transcoded(video_id: int, source_path: Path) -> Path:
         subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=1800)
     except subprocess.CalledProcessError as exc:
         tmp_path.unlink(missing_ok=True)
+        metadata_tmp_path.unlink(missing_ok=True)
         raise RuntimeError(f"ffmpeg-Transcode fehlgeschlagen: {exc.stderr}") from exc
     except subprocess.TimeoutExpired as exc:
         tmp_path.unlink(missing_ok=True)
+        metadata_tmp_path.unlink(missing_ok=True)
         raise RuntimeError("ffmpeg-Transcode hat das Zeitlimit überschritten.") from exc
 
     tmp_path.rename(dest_path)
+    metadata_tmp_path.write_text(json.dumps(source_signature), encoding="utf-8")
     return dest_path

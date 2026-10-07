@@ -19,7 +19,10 @@ from .thumbnails import (
     get_photo_thumbnail_path,
     get_thumbnail_path,
 )
-from .transcode import get_cache_path as get_transcode_cache_path
+from .transcode import (
+    get_cache_metadata_path as get_transcode_cache_metadata_path,
+    get_cache_path as get_transcode_cache_path,
+)
 
 # Verhindert, dass zwei Scans gleichzeitig laufen (z.B. weil ein Client nach
 # einem 504-Timeout des Reverse-Proxys den Scan für erneut fehlgeschlagen
@@ -141,6 +144,43 @@ def _probe(filepath: Path) -> dict:
     }
 
 
+def _source_signature(filepath: Path) -> tuple[int, int, int]:
+    """Schnelle Versionserkennung für eine Quelldatei.
+
+    Größe, Nanosekunden-mtime und Inode erkennen die übliche Exportroutine
+    (temporäre Datei schreiben und anschließend umbenennen), ohne beim Scan
+    jede Videodatei vollständig hashen zu müssen.
+    """
+    stat = filepath.stat()
+    return (
+        int(stat.st_size),
+        int(stat.st_mtime_ns),
+        int(getattr(stat, "st_ino", 0)),
+    )
+
+
+def _invalidate_video_version(conn: sqlite3.Connection, video_id: int, filepath: Path, duration: float | None) -> None:
+    """Entfernt Caches, die zu einer älteren Datei-Version gehören."""
+    get_transcode_cache_path(video_id).unlink(missing_ok=True)
+    get_transcode_cache_metadata_path(video_id).unlink(missing_ok=True)
+    marker_rows = conn.execute(
+        "SELECT id FROM markers WHERE video_id = ?", (video_id,)
+    ).fetchall()
+    for marker in marker_rows:
+        get_marker_frame_path(marker["id"]).unlink(missing_ok=True)
+
+    # Ein manuell gesetztes Thumbnail bleibt erhalten, sofern es neuer als die
+    # Quelle ist. Automatische Thumbnails werden bei einer neuen Version
+    # aktualisiert, sobald sie älter als die Quelldatei sind.
+    thumbnail = get_thumbnail_path(video_id)
+    try:
+        refresh_thumbnail = not thumbnail.is_file() or thumbnail.stat().st_mtime_ns < filepath.stat().st_mtime_ns
+    except OSError:
+        refresh_thumbnail = False
+    if refresh_thumbnail:
+        generate_thumbnail(video_id, filepath, duration)
+
+
 def scan_library(folders: list[str] | None = None) -> dict:
     """Öffentlicher Einstiegspunkt - siehe _scan_lock oben, warum das nicht
     einfach die Scan-Logik selbst ist."""
@@ -177,31 +217,54 @@ def _scan_library_impl() -> dict:
                     continue
                 if not path.is_file() or path.suffix.lower() not in VIDEO_EXTENSIONS:
                     continue
+                try:
+                    source_size, source_mtime_ns, source_inode = _source_signature(path)
+                except OSError:
+                    # Datei wurde während des Scans verschoben/ersetzt.
+                    continue
                 rel_path = str(path.relative_to(VIDEOS_DIR))
                 found_paths.add(rel_path)
 
                 existing = conn.execute(
-                    "SELECT id, duration_seconds, bit_rate FROM videos WHERE filepath = ?", (rel_path,)
+                    "SELECT id, duration_seconds, codec, bit_rate, width, "
+                    "source_size, source_mtime_ns, source_inode "
+                    "FROM videos WHERE filepath = ?", (rel_path,)
                 ).fetchone()
                 if existing:
                     skipped_existing += 1
-                    # Nachziehen für Videos, die vor Einführung des Thumbnail-
-                    # bzw. Bitrate/Breite-Features gescannt wurden.
+                    signature_known = all(
+                        existing[key] is not None
+                        for key in ("source_size", "source_mtime_ns", "source_inode")
+                    )
+                    source_changed = signature_known and (
+                        existing["source_size"], existing["source_mtime_ns"], existing["source_inode"]
+                    ) != (source_size, source_mtime_ns, source_inode)
+                    if source_changed:
+                        meta = _probe(path)
+                        _invalidate_video_version(conn, existing["id"], path, meta["duration_seconds"])
+                        conn.execute(
+                            "UPDATE videos SET duration_seconds = ?, codec = ?, bit_rate = ?, width = ?, "
+                            "source_size = ?, source_mtime_ns = ?, source_inode = ? WHERE id = ?",
+                            (meta["duration_seconds"], meta["codec"], meta["bit_rate"], meta["width"],
+                             source_size, source_mtime_ns, source_inode, existing["id"]),
+                        )
+                    elif not signature_known:
+                        # Bestandsdaten einmalig mit einer Signatur versehen,
+                        # ohne vorhandene manuelle Thumbnails zu überschreiben.
+                        conn.execute(
+                            "UPDATE videos SET source_size = ?, source_mtime_ns = ?, source_inode = ? WHERE id = ?",
+                            (source_size, source_mtime_ns, source_inode, existing["id"]),
+                        )
                     if not get_thumbnail_path(existing["id"]).is_file():
                         generate_thumbnail(existing["id"], path, existing["duration_seconds"])
-                    if existing["bit_rate"] is None:
-                        meta = _probe(path)
-                        conn.execute(
-                            "UPDATE videos SET bit_rate = ?, width = ? WHERE id = ?",
-                            (meta["bit_rate"], meta["width"], existing["id"]),
-                        )
                 else:
                     meta = _probe(path)
                     try:
                         cursor = conn.execute(
-                            "INSERT INTO videos (filepath, title, duration_seconds, codec, bit_rate, width) "
-                            "VALUES (?, ?, ?, ?, ?, ?)",
-                            (rel_path, path.stem, meta["duration_seconds"], meta["codec"], meta["bit_rate"], meta["width"]),
+                            "INSERT INTO videos (filepath, title, duration_seconds, codec, bit_rate, width, "
+                            "source_size, source_mtime_ns, source_inode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            (rel_path, path.stem, meta["duration_seconds"], meta["codec"], meta["bit_rate"],
+                             meta["width"], source_size, source_mtime_ns, source_inode),
                         )
                     except sqlite3.IntegrityError:
                         # Sollte dank _scan_lock nicht mehr vorkommen, bleibt aber
@@ -245,6 +308,7 @@ def _scan_library_impl() -> dict:
                 conn.execute("DELETE FROM videos WHERE id = ?", (row["id"],))
                 get_thumbnail_path(row["id"]).unlink(missing_ok=True)
                 get_transcode_cache_path(row["id"]).unlink(missing_ok=True)
+                get_transcode_cache_metadata_path(row["id"]).unlink(missing_ok=True)
                 for marker_id in marker_ids:
                     get_marker_frame_path(marker_id).unlink(missing_ok=True)
                 removed += 1
@@ -310,27 +374,49 @@ def _scan_library_scoped(folders: list[str]) -> dict:
                     continue
                 if not path.is_file() or path.suffix.lower() not in VIDEO_EXTENSIONS:
                     continue
+                try:
+                    source_size, source_mtime_ns, source_inode = _source_signature(path)
+                except OSError:
+                    continue
                 rel_path = str(path.relative_to(VIDEOS_DIR)).replace("\\", "/")
                 found_paths.add(rel_path)
                 existing = conn.execute(
-                    "SELECT id, duration_seconds, bit_rate FROM videos WHERE filepath = ?", (rel_path,)
+                    "SELECT id, duration_seconds, codec, bit_rate, width, "
+                    "source_size, source_mtime_ns, source_inode "
+                    "FROM videos WHERE filepath = ?", (rel_path,)
                 ).fetchone()
                 if existing:
                     unchanged += 1
+                    signature_known = all(
+                        existing[key] is not None
+                        for key in ("source_size", "source_mtime_ns", "source_inode")
+                    )
+                    source_changed = signature_known and (
+                        existing["source_size"], existing["source_mtime_ns"], existing["source_inode"]
+                    ) != (source_size, source_mtime_ns, source_inode)
+                    if source_changed:
+                        meta = _probe(path)
+                        _invalidate_video_version(conn, existing["id"], path, meta["duration_seconds"])
+                        conn.execute(
+                            "UPDATE videos SET duration_seconds = ?, codec = ?, bit_rate = ?, width = ?, "
+                            "source_size = ?, source_mtime_ns = ?, source_inode = ? WHERE id = ?",
+                            (meta["duration_seconds"], meta["codec"], meta["bit_rate"], meta["width"],
+                             source_size, source_mtime_ns, source_inode, existing["id"]),
+                        )
+                    elif not signature_known:
+                        conn.execute(
+                            "UPDATE videos SET source_size = ?, source_mtime_ns = ?, source_inode = ? WHERE id = ?",
+                            (source_size, source_mtime_ns, source_inode, existing["id"]),
+                        )
                     if not get_thumbnail_path(existing["id"]).is_file():
                         generate_thumbnail(existing["id"], path, existing["duration_seconds"])
-                    if existing["bit_rate"] is None:
-                        meta = _probe(path)
-                        conn.execute(
-                            "UPDATE videos SET bit_rate = ?, width = ? WHERE id = ?",
-                            (meta["bit_rate"], meta["width"], existing["id"]),
-                        )
                 else:
                     meta = _probe(path)
                     cursor = conn.execute(
-                        "INSERT INTO videos (filepath, title, duration_seconds, codec, bit_rate, width) "
-                        "VALUES (?, ?, ?, ?, ?, ?)",
-                        (rel_path, path.stem, meta["duration_seconds"], meta["codec"], meta["bit_rate"], meta["width"]),
+                        "INSERT INTO videos (filepath, title, duration_seconds, codec, bit_rate, width, "
+                        "source_size, source_mtime_ns, source_inode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (rel_path, path.stem, meta["duration_seconds"], meta["codec"], meta["bit_rate"],
+                         meta["width"], source_size, source_mtime_ns, source_inode),
                     )
                     generate_thumbnail(cursor.lastrowid, path, meta["duration_seconds"])
                     added += 1
@@ -348,6 +434,7 @@ def _scan_library_scoped(folders: list[str]) -> dict:
                 conn.execute("DELETE FROM videos WHERE id = ?", (row["id"],))
                 get_thumbnail_path(row["id"]).unlink(missing_ok=True)
                 get_transcode_cache_path(row["id"]).unlink(missing_ok=True)
+                get_transcode_cache_metadata_path(row["id"]).unlink(missing_ok=True)
                 for marker_id in marker_ids:
                     get_marker_frame_path(marker_id).unlink(missing_ok=True)
                 removed += 1

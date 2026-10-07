@@ -190,6 +190,8 @@ def init_db() -> None:
                 # Upload-Kontingent in Bytes, individuell pro Kunde überschreibbar.
                 # NULL = Standard-Kontingent (uploads.DEFAULT_QUOTA_BYTES) gilt.
                 "upload_quota_bytes": "INTEGER",
+                # Kundenordner, aus denen die Fotogalerie lesen darf (JSON-Array).
+                "photo_folders": "TEXT",
             },
         )
         _migrate_add_columns(conn, "markers", {"drawing": "TEXT"})
@@ -203,6 +205,12 @@ def init_db() -> None:
                 # transcode.ensure_transcoded().
                 "bit_rate": "INTEGER",
                 "width": "INTEGER",
+                # Dateisystem-Signatur der Quelle. Damit werden Exporte mit
+                # gleichem Dateinamen als neue Version erkannt und Cache-Dateien
+                # (Proxy/Thumbnail) nicht weiterverwendet.
+                "source_size": "INTEGER",
+                "source_mtime_ns": "INTEGER",
+                "source_inode": "INTEGER",
             },
         )
 

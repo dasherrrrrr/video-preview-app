@@ -7,6 +7,7 @@ import json
 import os
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
@@ -20,6 +21,7 @@ from ..customers import (
     revoke_token_for_user,
     set_permissions,
     set_photo_permissions,
+    set_photo_folders,
     set_upload_folder,
     set_upload_quota,
 )
@@ -224,6 +226,17 @@ def update_customer_upload_folder(user_id: int, payload: UploadFolderUpdate, adm
     _fetch_customer_or_404(user_id)
     set_upload_folder(user_id, payload.upload_folder)
     return {"upload_folder": payload.upload_folder}
+
+
+@router.put("/customers/{user_id}/photo-folders")
+def update_customer_photo_folders(user_id: int, payload: PhotoFolders, admin=Depends(require_api_admin)):
+    """Legt die kundenbezogenen Archivwurzeln für die Fotogalerie fest."""
+    _fetch_customer_or_404(user_id)
+    normalized = [f.strip().strip("/") for f in payload.folders if f.strip().strip("/")]
+    if any(any(part in {"", ".", ".."} for part in Path(folder).parts) for folder in normalized):
+        raise HTTPException(status_code=400, detail="Ungültiger Foto-Ordnerpfad.")
+    set_photo_folders(user_id, normalized)
+    return {"folders": normalized}
 
 
 @router.put("/customers/{user_id}/upload-quota")

@@ -186,6 +186,7 @@ def api_download_video(video_id: int, user=Depends(require_api_token)):
 
 
 def _photo_to_dict(photo) -> dict:
+    filepath = str(photo["filepath"])
     return {
         "id": photo["id"],
         "title": photo["title"],
@@ -194,6 +195,8 @@ def _photo_to_dict(photo) -> dict:
         "thumbnail_url": f"/api/photo-thumbnail/{photo['id']}",
         "photo_url": f"/api/photo/{photo['id']}",
         "download_url": f"/api/photo/{photo['id']}",
+        "file_name": Path(filepath).name,
+        "folder_path": filepath.rsplit("/", 1)[0] if "/" in filepath else "",
     }
 
 
@@ -224,15 +227,35 @@ def list_photos(user=Depends(require_api_token)):
     with get_db() as conn:
         if user["is_admin"]:
             photos = conn.execute(
-                "SELECT id, title, width, height FROM photos ORDER BY filepath"
+                "SELECT id, filepath, title, width, height FROM photos ORDER BY filepath"
             ).fetchall()
         else:
             photos = conn.execute(
-                "SELECT ph.id, ph.title, ph.width, ph.height "
+                "SELECT DISTINCT ph.id, ph.filepath, ph.title, ph.width, ph.height "
                 "FROM photos ph JOIN photo_permissions pp ON pp.photo_id = ph.id "
-                "WHERE pp.user_id = ? ORDER BY ph.filepath",
+                "WHERE pp.user_id = ?",
                 (user["id"],),
             ).fetchall()
+            folders: list[str] = []
+            raw = user["photo_folders"] if "photo_folders" in user.keys() else None
+            if raw:
+                try:
+                    folders.extend(json.loads(raw))
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    pass
+            if "upload_folder" in user.keys() and user["upload_folder"]:
+                folders.append(user["upload_folder"])
+            folders = [folder.strip("/") for folder in folders if folder and folder.strip("/")]
+            if folders:
+                conditions = " OR ".join("(filepath = ? OR filepath LIKE ?)" for _ in folders)
+                params = [value for folder in folders for value in (folder, folder + "/%")]
+                scoped = conn.execute(
+                    f"SELECT id, filepath, title, width, height FROM photos WHERE {conditions}",
+                    params,
+                ).fetchall()
+                by_id = {row["id"]: row for row in photos}
+                by_id.update({row["id"]: row for row in scoped})
+                photos = sorted(by_id.values(), key=lambda row: row["filepath"])
     return [_photo_to_dict(p) for p in photos]
 
 

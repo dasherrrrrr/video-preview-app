@@ -2,6 +2,7 @@
 Session-Streaming-Endpoint und Token-basierten API-Endpoint."""
 
 import mimetypes
+import json
 import re
 import time
 from pathlib import Path
@@ -49,9 +50,31 @@ def get_authorized_photo(photo_id: int, user):
                 "SELECT 1 FROM photo_permissions WHERE user_id = ? AND photo_id = ?",
                 (user["id"], photo_id),
             ).fetchone()
-            if not allowed:
+            if not allowed and not _photo_in_user_folders(photo, user):
                 raise HTTPException(status_code=403, detail="Kein Zugriff auf dieses Foto.")
     return photo
+
+
+def _photo_in_user_folders(photo, user) -> bool:
+    """Prüft den ordnerbasierten Zugriff der Kunden-Fotogalerie."""
+    folders: list[str] = []
+    raw = user["photo_folders"] if "photo_folders" in user.keys() else None
+    if raw:
+        try:
+            folders.extend(json.loads(raw))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            pass
+    # Bestehende Kunden hatten bisher nur upload_folder. Das bleibt als
+    # kompatibler Fallback zugleich ihr primärer Fotoordner.
+    upload_folder = user["upload_folder"] if "upload_folder" in user.keys() else None
+    if upload_folder:
+        folders.append(upload_folder)
+    filepath = str(photo["filepath"]).strip("/")
+    return any(
+        filepath == folder.strip("/")
+        or filepath.startswith(folder.strip("/") + "/")
+        for folder in folders if folder and folder.strip("/")
+    )
 
 
 def build_stream_response(

@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from ..api_auth import require_api_admin
-from ..catalog import ensure_photo_folders, scan_photo_folders
+from ..catalog import ensure_photo_folders, refresh_media_folders, scan_photo_folders
 from ..scan_jobs import get_scan_status, start_scan
 from ..customers import (
     create_customer,
@@ -138,6 +138,15 @@ def list_folders(admin=Depends(require_api_admin)):
             "SELECT path FROM media_folders ORDER BY path"
         ).fetchall()
     return [row["path"] for row in rows]
+
+
+@router.post("/folders/scan")
+def refresh_folders(payload: ScanRequest | None = None, admin=Depends(require_api_admin)):
+    """Synchronisiert nur den Verzeichnisbaum – ohne Medienkatalog-Scan."""
+    try:
+        return refresh_media_folders(payload.folders if payload else None)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/customers/{user_id}/videos")

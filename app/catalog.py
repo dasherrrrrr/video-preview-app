@@ -43,6 +43,65 @@ VIDEO_EXTENSIONS = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v"}
 PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp", ".tif", ".tiff"}
 
 
+def refresh_media_folders(folders: list[str] | None = None) -> dict:
+    """Aktualisiert ausschließlich den auswählbaren Verzeichnisbaum.
+
+    Anders als ``scan_library`` werden dabei weder Mediendateien mit ffprobe
+    untersucht noch Vorschaudateien oder Transcodes erzeugt. Das ist der
+    passende, schnelle Refresh für die Ordner-Picker in Concorde.
+    """
+    with _scan_lock:
+        if not VIDEOS_DIR.is_dir():
+            raise RuntimeError("Medien-Mount ist nicht erreichbar; Ordnerliste bleibt unverändert.")
+
+        root = VIDEOS_DIR.resolve()
+        normalized = [folder.strip().strip("/") for folder in (folders or []) if folder and folder.strip().strip("/")]
+        scan_roots: list[Path] = []
+        prefixes: list[str] = []
+        if normalized:
+            for folder in normalized:
+                rel = Path(folder)
+                if rel.is_absolute() or any(part in {"", ".", ".."} for part in rel.parts):
+                    raise ValueError("Ungültiger Ordnerpfad.")
+                target = (root / rel).resolve()
+                if target != root and root not in target.parents:
+                    raise ValueError("Ordner liegt außerhalb des Medienarchivs.")
+                if target.is_dir():
+                    scan_roots.append(target)
+                    prefixes.append(str(rel).replace("\\", "/"))
+        else:
+            scan_roots = [root]
+
+        # Bei einem gezielten Refresh darf ein noch nicht synchronisierter
+        # Hauptordner nicht die bestehende Ordnerliste anderer Kunden löschen.
+        if not scan_roots:
+            return {"folders": 0}
+
+        found: set[str] = set()
+        for scan_root in scan_roots:
+            for current, _dirs, _files in os.walk(scan_root):
+                current_path = Path(current)
+                if current_path == root:
+                    continue
+                found.add(str(current_path.relative_to(root)).replace("\\", "/"))
+
+        conn = get_connection()
+        try:
+            if prefixes:
+                existing = [row["path"] for row in conn.execute("SELECT path FROM media_folders").fetchall()]
+                kept = [
+                    path for path in existing
+                    if not any(path == prefix or path.startswith(prefix + "/") for prefix in prefixes)
+                ]
+                found.update(kept)
+            conn.execute("DELETE FROM media_folders")
+            conn.executemany("INSERT INTO media_folders (path) VALUES (?)", ((path,) for path in sorted(found)))
+            conn.commit()
+        finally:
+            conn.close()
+        return {"folders": len(found)}
+
+
 def ensure_photo_folders(folders: list[str]) -> list[str]:
     """Legt sichere, relative Kunden-Fotoordner im beschreibbaren Archiv-Mount an.
 

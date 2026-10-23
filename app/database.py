@@ -14,7 +14,11 @@ DB_PATH = Path(__file__).parent.parent / "data" / "app.db"
 
 def get_connection() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    # Eine Verbindung wartet bei einer echten, kurzen Schreibkollision, statt
+    # sofort ``database is locked`` an den Browser weiterzugeben. Das ist
+    # zusätzlich zum PRAGMA nötig, weil der Connect selbst die Timeout-Vorgabe
+    # verwendet.
+    conn = sqlite3.connect(DB_PATH, timeout=30.0)
     # row_factory sorgt dafür, dass wir auf Spalten per Name zugreifen können
     # (z.B. row["username"]) statt nur per Index (row[0])
     conn.row_factory = sqlite3.Row
@@ -31,7 +35,7 @@ def get_connection() -> sqlite3.Connection:
     # kollidieren (WAL erlaubt weiterhin nur einen Schreiber gleichzeitig),
     # 10 Sekunden auf den Lock warten statt sofort mit OperationalError
     # abzubrechen.
-    conn.execute("PRAGMA busy_timeout = 10000")
+    conn.execute("PRAGMA busy_timeout = 30000")
     return conn
 
 

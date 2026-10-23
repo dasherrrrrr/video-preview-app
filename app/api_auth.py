@@ -50,10 +50,13 @@ def require_api_token(
         ).fetchone()
         if not row:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Ungültiger API-Token.")
-        conn.execute(
-            "UPDATE api_tokens SET last_used_at = datetime('now') WHERE token_hash = ?",
-            (token_hash,),
-        )
+        # Diese Abfrage läuft bei jedem Bild, Thumbnail und API-Aufruf. Ein
+        # UPDATE an dieser Stelle würde jede dieser sonst rein lesenden
+        # Anfragen zu einem SQLite-Schreibvorgang machen. Während ein
+        # Katalog-Scan schreibt, kollidieren parallele Browser-Anfragen dann
+        # zwangsläufig mit dem einzigen SQLite-Writer und enden als 500.
+        # Die Token-Prüfung bleibt vollständig erhalten; ``last_used_at`` ist
+        # bewusst kein synchrones Request-Telemetrie-Feld mehr.
 
     user = get_user_by_id(row["user_id"])
     if not user:

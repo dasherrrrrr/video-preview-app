@@ -190,6 +190,11 @@ def init_db() -> None:
                 # Upload-Kontingent in Bytes, individuell pro Kunde überschreibbar.
                 # NULL = Standard-Kontingent (uploads.DEFAULT_QUOTA_BYTES) gilt.
                 "upload_quota_bytes": "INTEGER",
+                # Ausschließlich für Kunden-Uploads. Diese Ordner sind bewusst
+                # getrennt von den allgemeinen Video-/Foto-Freigaben: ein Kunde
+                # kann nur in die hier explizit gesetzten Ziele schreiben.
+                "photo_upload_folder": "TEXT",
+                "video_upload_folder": "TEXT",
                 # Kundenordner, aus denen die Fotogalerie lesen darf (JSON-Array).
                 "photo_folders": "TEXT",
             },

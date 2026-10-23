@@ -23,6 +23,7 @@ from ..customers import (
     set_photo_permissions,
     set_photo_folders,
     set_upload_folder,
+    set_upload_folders,
     set_upload_quota,
 )
 from ..database import get_db
@@ -64,10 +65,15 @@ class UploadQuotaUpdate(BaseModel):
     quota_bytes: int | None = None
 
 
+class UploadFoldersUpdate(BaseModel):
+    photo_upload_folder: str | None = None
+    video_upload_folder: str | None = None
+
+
 def _fetch_customer_or_404(user_id: int):
     with get_db() as conn:
         row = conn.execute(
-            "SELECT id, username, email, phone, upload_folder, upload_quota_bytes FROM users WHERE id = ? AND is_admin = 0",
+            "SELECT id, username, email, phone, upload_folder, photo_upload_folder, video_upload_folder, upload_quota_bytes FROM users WHERE id = ? AND is_admin = 0",
             (user_id,),
         ).fetchone()
     if not row:
@@ -228,6 +234,17 @@ def update_customer_upload_folder(user_id: int, payload: UploadFolderUpdate, adm
     return {"upload_folder": payload.upload_folder}
 
 
+@router.put("/customers/{user_id}/upload-folders")
+def update_customer_upload_folders(user_id: int, payload: UploadFoldersUpdate, admin=Depends(require_api_admin)):
+    """Setzt getrennte, konkrete Ziele für Foto- und Video-Kundenuploads."""
+    _fetch_customer_or_404(user_id)
+    set_upload_folders(user_id, payload.photo_upload_folder, payload.video_upload_folder)
+    return {
+        "photo_upload_folder": payload.photo_upload_folder,
+        "video_upload_folder": payload.video_upload_folder,
+    }
+
+
 @router.put("/customers/{user_id}/photo-folders")
 def update_customer_photo_folders(user_id: int, payload: PhotoFolders, admin=Depends(require_api_admin)):
     """Legt die kundenbezogenen Archivwurzeln für die Fotogalerie fest."""
@@ -256,9 +273,14 @@ def get_customer_upload_usage(user_id: int, admin=Depends(require_api_admin)):
     """Kontingent-Übersicht (Dateien + genutzter/verbleibender Speicher) für
     den Kunden - z.B. damit Concorde das später irgendwo anzeigen kann."""
     customer = _fetch_customer_or_404(user_id)
-    if not customer["upload_folder"]:
+    folders = [
+        customer[key]
+        for key in ("photo_upload_folder", "video_upload_folder")
+        if key in customer.keys() and customer[key]
+    ]
+    if not folders:
         raise HTTPException(status_code=404, detail="Für diesen Kunden ist kein Upload freigeschaltet.")
-    return get_quota_usage(customer["upload_folder"], customer["upload_quota_bytes"])
+    return get_quota_usage(folders, customer["upload_quota_bytes"])
 
 
 @router.post("/scan")

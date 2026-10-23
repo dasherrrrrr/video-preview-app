@@ -1,4 +1,12 @@
 services:
+  clamav:
+    image: clamav/clamav:stable
+    container_name: video-preview-clamav
+    restart: unless-stopped
+    volumes:
+      - ./clamav-data:/var/lib/clamav
+    # Not published to the host: only the preview app can request scans.
+
   video-preview:
     build: .
     container_name: video-preview
@@ -35,6 +43,12 @@ services:
       - SUPABASE_URL=${SUPABASE_URL:-}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
       - INCIDENT_INGEST_TOKEN=${INCIDENT_INGEST_TOKEN:-}
+      # Kundenmaterial wird nur nach einem erfolgreichen, fail-closed ClamAV-
+      # Scan übernommen. Ist der Scanner noch beim Signaturupdate, werden
+      # Uploads abgelehnt statt ungescannt abgelegt.
+      - CLAMAV_HOST=clamav
+      - CLAMAV_PORT=3310
+      - MAX_UPLOAD_FILE_BYTES=${MAX_UPLOAD_FILE_BYTES:-26843545600}
     restart: unless-stopped
 
     # VAAPI-Transcoding über eine Intel-GPU (z.B. Arc A380). Pfad über

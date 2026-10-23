@@ -3,56 +3,58 @@ Kunde einstellbar - siehe app/customers.py:set_upload_quota) - die eigentliche
 Logik steckt in app/uploads.py. Nutzt dieselbe Token-Auth wie die übrige
 Kunden-API (/api/*)."""
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 
 from ..api_auth import require_api_token
-from ..catalog import scan_photo_folders
+from ..catalog import scan_library, scan_photo_folders
 from ..database import get_db
-from ..uploads import delete_upload, get_quota_usage, save_photo_upload, save_upload
+from ..uploads import delete_upload, get_quota_usage, save_customer_upload
 
 router = APIRouter(prefix="/api")
 
 
-def _require_upload_folder(user) -> str:
-    folder = user["upload_folder"]
-    if not folder:
-        raise HTTPException(status_code=403, detail="Für diesen Kunden ist kein Upload freigeschaltet.")
-    return folder
+def _all_upload_folders(user) -> list[str]:
+    return [
+        user[key]
+        for key in ("photo_upload_folder", "video_upload_folder")
+        if key in user.keys() and user[key]
+    ]
 
 
 @router.get("/upload")
 def list_uploads(user=Depends(require_api_token)):
-    return get_quota_usage(_require_upload_folder(user), user["upload_quota_bytes"])
+    folders = _all_upload_folders(user)
+    if not folders:
+        raise HTTPException(status_code=403, detail="Für diesen Kunden ist kein konkreter Upload-Zielordner freigeschaltet.")
+    return get_quota_usage(folders, user["upload_quota_bytes"])
 
 
 @router.post("/upload")
-async def upload_file(file: UploadFile, user=Depends(require_api_token)):
-    folder = _require_upload_folder(user)
-    content = await file.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="Datei ist leer.")
-    return save_upload(folder, file.filename or "datei", content, user["upload_quota_bytes"])
-
-
-@router.post("/photo-upload")
-async def upload_photo(file: UploadFile, user=Depends(require_api_token)):
-    """Speichert ein Galerie-Foto nach <Kundenordner>/fotos/uploads und gibt es frei."""
-    folder = _require_upload_folder(user)
-    content = await file.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="Datei ist leer.")
-    saved = save_photo_upload(folder, file.filename or "foto", content, user["upload_quota_bytes"])
-    photo_folder = f"{folder}/fotos/uploads"
-    scan_photo_folders([photo_folder])
-    with get_db() as conn:
-        photo = conn.execute("SELECT id FROM photos WHERE filepath = ?", (saved["filepath"],)).fetchone()
-        if not photo:
-            raise HTTPException(status_code=500, detail="Foto konnte nicht katalogisiert werden.")
-        conn.execute("INSERT OR IGNORE INTO photo_permissions (user_id, photo_id) VALUES (?, ?)", (user["id"], photo["id"]))
+async def upload_file(
+    file: UploadFile,
+    area: str = Form(...),
+    upload_name: str = Form(..., min_length=1, max_length=80),
+    user=Depends(require_api_token),
+):
+    saved = await save_customer_upload(user, area, upload_name, file)
+    if area == "photo":
+        scan_photo_folders([str(saved["filepath"]).rsplit("/", 1)[0]])
+        with get_db() as conn:
+            photo = conn.execute("SELECT id FROM photos WHERE filepath = ?", (saved["filepath"],)).fetchone()
+            if not photo:
+                raise HTTPException(status_code=500, detail="Foto konnte nicht katalogisiert werden.")
+            conn.execute("INSERT OR IGNORE INTO photo_permissions (user_id, photo_id) VALUES (?, ?)", (user["id"], photo["id"]))
+    else:
+        scan_library([str(saved["filepath"]).rsplit("/", 1)[0]])
+        with get_db() as conn:
+            video = conn.execute("SELECT id FROM videos WHERE filepath = ?", (saved["filepath"],)).fetchone()
+            if not video:
+                raise HTTPException(status_code=500, detail="Video konnte nicht katalogisiert werden.")
+            conn.execute("INSERT OR IGNORE INTO permissions (user_id, video_id) VALUES (?, ?)", (user["id"], video["id"]))
     return saved
 
 
 @router.delete("/upload/{filename}")
 def delete_uploaded_file(filename: str, user=Depends(require_api_token)):
-    delete_upload(_require_upload_folder(user), filename)
+    delete_upload(_all_upload_folders(user), filename)
     return {"ok": True}

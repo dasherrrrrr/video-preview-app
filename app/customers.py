@@ -122,6 +122,22 @@ def set_upload_quota(user_id: int, quota_bytes: int | None) -> None:
         )
 
 
+def set_upload_folders(user_id: int, photo_folder: str | None, video_folder: str | None) -> None:
+    """Setzt die zwei expliziten Ziele für Foto- bzw. Video-Kundenuploads."""
+    def normalize(value: str | None) -> str | None:
+        cleaned = value.strip().strip("/") if value else ""
+        rel = Path(cleaned)
+        if cleaned and (rel.is_absolute() or any(part in {"", ".", ".."} for part in rel.parts)):
+            raise HTTPException(status_code=400, detail="Ungültiger Upload-Zielordner.")
+        return cleaned or None
+
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE users SET photo_upload_folder = ?, video_upload_folder = ? WHERE id = ?",
+            (normalize(photo_folder), normalize(video_folder), user_id),
+        )
+
+
 def set_photo_folders(user_id: int, folders: list[str]) -> None:
     """Setzt die relativen Archivordner, aus denen der Kunde Fotos sehen darf."""
     normalized: list[str] = []

@@ -37,7 +37,7 @@ async def upload_file(
     user=Depends(require_api_token),
 ):
     saved = await save_customer_upload(user, area, upload_name, file)
-    if area == "photo":
+    if saved["area"] == "photo":
         scan_photo_folders([str(saved["filepath"]).rsplit("/", 1)[0]])
         with get_db() as conn:
             photo = conn.execute("SELECT id FROM photos WHERE filepath = ?", (saved["filepath"],)).fetchone()

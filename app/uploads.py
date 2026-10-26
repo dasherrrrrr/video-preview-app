@@ -24,8 +24,8 @@ VIDEOS_RW_DIR = Path(os.environ.get("VIDEOS_RW_DIR", "/videos-rw"))
 DEFAULT_QUOTA_BYTES = 5 * 1024 * 1024 * 1024
 MAX_UPLOAD_FILE_BYTES = int(os.environ.get("MAX_UPLOAD_FILE_BYTES", str(25 * 1024**3)))
 
-PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif"}
-VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".avi", ".webm", ".mkv"}
+PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif", ".avif", ".tif", ".tiff", ".bmp"}
+VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".avi", ".webm", ".mkv", ".wmv", ".mpg", ".mpeg", ".3gp", ".ts"}
 ALLOWED_EXTENSIONS = PHOTO_EXTENSIONS | VIDEO_EXTENSIONS
 
 
@@ -60,6 +60,17 @@ def _configured_folder(user, area: str) -> str:
     if not folder:
         raise HTTPException(status_code=403, detail="Für diesen Bereich wurde noch kein konkreter Upload-Zielordner freigegeben.")
     return str(_safe_relative_folder(folder)).replace("\\", "/")
+
+
+def _resolved_area(area: str, extension: str) -> str:
+    if area == "mixed":
+        if extension in PHOTO_EXTENSIONS:
+            return "photo"
+        if extension in VIDEO_EXTENSIONS:
+            return "video"
+    if area in {"photo", "video"}:
+        return area
+    raise HTTPException(status_code=400, detail="Ungültiger Upload-Bereich.")
 
 
 def _customer_upload_root(folder: str) -> Path:
@@ -106,12 +117,22 @@ def _matches_signature(path: Path, extension: str) -> bool:
         return header.startswith((b"GIF87a", b"GIF89a"))
     if extension == ".webp":
         return header.startswith(b"RIFF") and header[8:12] == b"WEBP"
-    if extension in {".heic", ".heif", ".mp4", ".mov", ".m4v"}:
+    if extension == ".bmp":
+        return header.startswith(b"BM")
+    if extension in {".tif", ".tiff"}:
+        return header.startswith((b"II*\x00", b"MM\x00*"))
+    if extension in {".heic", ".heif", ".avif", ".mp4", ".mov", ".m4v", ".3gp"}:
         return len(header) >= 12 and header[4:8] == b"ftyp"
     if extension in {".webm", ".mkv"}:
         return header.startswith(b"\x1a\x45\xdf\xa3")
     if extension == ".avi":
         return header.startswith(b"RIFF") and header[8:12] == b"AVI "
+    if extension == ".wmv":
+        return header.startswith(b"\x30\x26\xb2\x75\x8e\x66\xcf\x11\xa6\xd9\x00\xaa\x00\x62\xce\x6c")
+    if extension in {".mpg", ".mpeg"}:
+        return header.startswith((b"\x00\x00\x01\xba", b"\x00\x00\x01\xb3"))
+    if extension == ".ts":
+        return header.startswith(b"G")
     return False
 
 
@@ -164,15 +185,16 @@ def _next_target(directory: Path, filename: str) -> Path:
 
 
 async def save_customer_upload(user, area: str, upload_name: str, upload: UploadFile) -> dict:
-    folder = _configured_folder(user, area)
     safe_name = _sanitize_filename(upload.filename or "datei")
+    resolved_area = _resolved_area(area, Path(safe_name).suffix.lower())
+    folder = _configured_folder(user, resolved_area)
     batch = f"{datetime.now().strftime('%Y.%m.%d')} - {_safe_component(user['username'], 'Kunde')} - {_safe_component(upload_name, 'Upload')}"
     batch_dir = _customer_upload_root(folder) / batch
     folders = [user[key] for key in ("photo_upload_folder", "video_upload_folder") if key in user.keys() and user[key]]
     usage = get_quota_usage(folders, user["upload_quota_bytes"])
     temporary, size = await _write_temporary(upload, batch_dir, usage["remaining_bytes"])
     try:
-        _validate_media(temporary, Path(safe_name).suffix.lower(), area)
+        _validate_media(temporary, Path(safe_name).suffix.lower(), resolved_area)
         scan_for_malware(temporary)
         target = _next_target(batch_dir, safe_name)
         shutil.move(str(temporary), target)
@@ -184,6 +206,7 @@ async def save_customer_upload(user, area: str, upload_name: str, upload: Upload
         "filepath": str(target.relative_to(VIDEOS_RW_DIR)).replace("\\", "/"),
         "batch": batch,
         "folder": folder,
+        "area": resolved_area,
     }
 
 

@@ -5,7 +5,7 @@ Kunden-API (/api/*)."""
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 
-from ..api_auth import require_api_token
+from ..api_auth import require_upload_token
 from ..catalog import scan_library, scan_photo_folders
 from ..database import get_db
 from ..uploads import delete_upload, get_quota_usage, save_customer_upload
@@ -22,11 +22,12 @@ def _all_upload_folders(user) -> list[str]:
 
 
 @router.get("/upload")
-def list_uploads(user=Depends(require_api_token)):
+def list_uploads(upload_access=Depends(require_upload_token)):
+    user = upload_access["user"]
     folders = _all_upload_folders(user)
     if not folders:
         raise HTTPException(status_code=403, detail="Für diesen Kunden ist kein konkreter Upload-Zielordner freigeschaltet.")
-    return get_quota_usage(folders, user["upload_quota_bytes"])
+    return get_quota_usage(folders, user["upload_quota_bytes"], upload_access["actor_id"])
 
 
 @router.post("/upload")
@@ -34,9 +35,10 @@ async def upload_file(
     file: UploadFile,
     area: str = Form(...),
     upload_name: str = Form(..., min_length=1, max_length=80),
-    user=Depends(require_api_token),
+    upload_access=Depends(require_upload_token),
 ):
-    saved = await save_customer_upload(user, area, upload_name, file)
+    user = upload_access["user"]
+    saved = await save_customer_upload(user, area, upload_name, file, upload_access["actor_id"], upload_access["actor_name"])
     if saved["area"] == "photo":
         scan_photo_folders([str(saved["filepath"]).rsplit("/", 1)[0]])
         with get_db() as conn:
@@ -54,7 +56,8 @@ async def upload_file(
     return saved
 
 
-@router.delete("/upload/{filename}")
-def delete_uploaded_file(filename: str, user=Depends(require_api_token)):
-    delete_upload(_all_upload_folders(user), filename)
+@router.delete("/upload/{filename:path}")
+def delete_uploaded_file(filename: str, upload_access=Depends(require_upload_token)):
+    user = upload_access["user"]
+    delete_upload(_all_upload_folders(user), filename, user["id"], upload_access["actor_id"])
     return {"ok": True}

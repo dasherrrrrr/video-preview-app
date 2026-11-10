@@ -17,6 +17,7 @@ from ..catalog import ensure_photo_folders, refresh_media_folders, scan_photo_fo
 from ..scan_jobs import get_scan_status, start_scan
 from ..customers import (
     create_customer,
+    generate_upload_token_for_user,
     generate_token_for_user,
     revoke_token_for_user,
     set_permissions,
@@ -70,6 +71,11 @@ class UploadFoldersUpdate(BaseModel):
     video_upload_folder: str | None = None
 
 
+class UploadTokenRequest(BaseModel):
+    actor_id: str
+    actor_name: str = "Portalmitglied"
+
+
 def _fetch_customer_or_404(user_id: int):
     with get_db() as conn:
         row = conn.execute(
@@ -115,6 +121,18 @@ def revoke_customer_token(user_id: int, admin=Depends(require_api_admin)):
     _fetch_customer_or_404(user_id)
     revoke_token_for_user(user_id)
     return {"ok": True}
+
+
+@router.post("/customers/{user_id}/upload-token")
+def create_customer_upload_token(user_id: int, payload: UploadTokenRequest, admin=Depends(require_api_admin)):
+    """Gibt Concorde einen zeitlich begrenzten Upload-Token für das aktuell
+    angemeldete Portalmitglied. Der Admin-API-Aufruf selbst ist nicht im
+    Browser erreichbar."""
+    _fetch_customer_or_404(user_id)
+    actor_id = payload.actor_id.strip()
+    if not actor_id or len(actor_id) > 120:
+        raise HTTPException(status_code=400, detail="Ungültige Portalmitglied-ID.")
+    return {"token": generate_upload_token_for_user(user_id, actor_id, payload.actor_name[:160])}
 
 
 @router.get("/catalog")

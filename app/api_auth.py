@@ -64,6 +64,27 @@ def require_api_token(
     return user
 
 
+def require_upload_token(authorization: Optional[str] = Header(default=None)):
+    """Authentifiziert einen kurzlebigen, vom Concorde-Server ausgestellten
+    Upload-Token. Der darin hinterlegte Actor wird ausschließlich serverseitig
+    verwendet, nie aus Browserdaten übernommen."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Fehlender oder ungültiger Upload-Token.")
+    token_hash = hash_token(authorization.removeprefix("Bearer ").strip())
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT user_id, actor_id, actor_name FROM upload_tokens "
+            "WHERE token_hash = ? AND expires_at > datetime('now')",
+            (token_hash,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Ungültiger oder abgelaufener Upload-Token.")
+    user = get_user_by_id(row["user_id"])
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Kunde zu diesem Upload-Token existiert nicht mehr.")
+    return {"user": user, "actor_id": row["actor_id"], "actor_name": row["actor_name"]}
+
+
 def require_api_admin(user=Depends(require_api_token)):
     """Wie require_api_token, aber nur für Admin-Tokens - für die
     Management-Endpunkte (/api/admin/*), über die z.B. Concorde Kunden anlegen

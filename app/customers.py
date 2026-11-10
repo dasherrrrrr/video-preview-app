@@ -51,6 +51,19 @@ def revoke_token_for_user(user_id: int) -> None:
         conn.execute("DELETE FROM api_tokens WHERE user_id = ?", (user_id,))
 
 
+def generate_upload_token_for_user(user_id: int, actor_id: str, actor_name: str) -> str:
+    """Erzeugt einen kurzlebigen Upload-Token für genau ein Portalmitglied."""
+    token = generate_api_token()
+    with get_db() as conn:
+        conn.execute("DELETE FROM upload_tokens WHERE user_id = ? AND actor_id = ?", (user_id, actor_id))
+        conn.execute(
+            "INSERT INTO upload_tokens (token_hash, user_id, actor_id, actor_name, expires_at) "
+            "VALUES (?, ?, ?, ?, datetime('now', '+12 hours'))",
+            (hash_token(token), user_id, actor_id, actor_name.strip() or "Portalmitglied"),
+        )
+    return token
+
+
 def set_permissions(user_id: int, video_ids: list[int]) -> None:
     with get_db() as conn:
         conn.execute("DELETE FROM permissions WHERE user_id = ?", (user_id,))

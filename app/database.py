@@ -138,6 +138,31 @@ def init_db() -> None:
                 last_used_at TEXT
             );
 
+            -- Kurzlebige, personengebundene Tokens ausschließlich für den
+            -- Kunden-Upload. Das allgemeine Kunden-Token bleibt damit rein
+            -- lesend für Medien; ein Portalmitglied kann weder die Identität
+            -- eines anderen Mitglieds vortäuschen noch dessen Upload löschen.
+            CREATE TABLE IF NOT EXISTS upload_tokens (
+                token_hash TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                actor_id TEXT NOT NULL,
+                actor_name TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(user_id, actor_id)
+            );
+
+            -- Jeder neue Kunden-Upload erhält serverseitig einen eindeutigen
+            -- Eigentümer. Bestandsdateien ohne Datensatz bleiben bewusst
+            -- nicht löschbar, weil ihre Urheberschaft nicht sicher belegbar ist.
+            CREATE TABLE IF NOT EXISTS customer_uploads (
+                filepath TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                actor_id TEXT NOT NULL,
+                actor_name TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
             -- Fotokatalog, analog zu videos: scan_photos() (siehe catalog.py)
             -- hält diese Tabelle mit dem Dateisystem synchron.
             CREATE TABLE IF NOT EXISTS photos (

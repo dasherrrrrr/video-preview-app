@@ -19,6 +19,7 @@ from pathlib import Path
 from fastapi import HTTPException, UploadFile
 
 from .virus_scan import scan_for_malware
+from .database import get_db
 
 VIDEOS_RW_DIR = Path(os.environ.get("VIDEOS_RW_DIR", "/videos-rw"))
 DEFAULT_QUOTA_BYTES = 5 * 1024 * 1024 * 1024
@@ -91,10 +92,16 @@ def _usage_roots(folders: list[str]) -> list[Path]:
     return result
 
 
-def get_quota_usage(folders: list[str], quota_bytes: int | None = None) -> dict:
+def get_quota_usage(folders: list[str], quota_bytes: int | None = None, actor_id: str | None = None) -> dict:
     quota = quota_bytes if quota_bytes and quota_bytes > 0 else DEFAULT_QUOTA_BYTES
     files: list[dict] = []
     total = 0
+    ownership: set[str] = set()
+    if actor_id:
+        with get_db() as conn:
+            ownership = {row["filepath"] for row in conn.execute(
+                "SELECT filepath FROM customer_uploads WHERE actor_id = ?", (actor_id,)
+            ).fetchall()}
     for root in _usage_roots(folders):
         if not root.is_dir():
             continue
@@ -102,7 +109,13 @@ def get_quota_usage(folders: list[str], quota_bytes: int | None = None) -> dict:
             if entry.is_file() and not entry.name.endswith(".partial"):
                 size = entry.stat().st_size
                 total += size
-                files.append({"filename": str(entry.relative_to(root)).replace("\\", "/"), "size_bytes": size})
+                storage_path = str(entry.relative_to(VIDEOS_RW_DIR)).replace("\\", "/")
+                files.append({
+                    "filename": str(entry.relative_to(root)).replace("\\", "/"),
+                    "storage_path": storage_path,
+                    "size_bytes": size,
+                    "can_delete": storage_path in ownership,
+                })
     return {"files": files, "used_bytes": total, "quota_bytes": quota, "remaining_bytes": max(0, quota - total)}
 
 
@@ -184,7 +197,7 @@ def _next_target(directory: Path, filename: str) -> Path:
     return target
 
 
-async def save_customer_upload(user, area: str, upload_name: str, upload: UploadFile) -> dict:
+async def save_customer_upload(user, area: str, upload_name: str, upload: UploadFile, actor_id: str, actor_name: str) -> dict:
     safe_name = _sanitize_filename(upload.filename or "datei")
     resolved_area = _resolved_area(area, Path(safe_name).suffix.lower())
     folder = _configured_folder(user, resolved_area)
@@ -200,23 +213,42 @@ async def save_customer_upload(user, area: str, upload_name: str, upload: Upload
         shutil.move(str(temporary), target)
     finally:
         temporary.unlink(missing_ok=True)
+    filepath = str(target.relative_to(VIDEOS_RW_DIR)).replace("\\", "/")
+    with get_db() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO customer_uploads (filepath, user_id, actor_id, actor_name) VALUES (?, ?, ?, ?)",
+            (filepath, user["id"], actor_id, actor_name),
+        )
     return {
         "filename": target.name,
         "size_bytes": size,
-        "filepath": str(target.relative_to(VIDEOS_RW_DIR)).replace("\\", "/"),
+        "filepath": filepath,
         "batch": batch,
         "folder": folder,
         "area": resolved_area,
     }
 
 
-def delete_upload(folders: list[str], filename: str) -> None:
-    rel = Path(filename)
+def delete_upload(folders: list[str], storage_path: str, user_id: int, actor_id: str) -> None:
+    rel = Path(storage_path)
     if rel.is_absolute() or any(part in {"", ".", ".."} for part in rel.parts):
         raise HTTPException(status_code=400, detail="Ungültiger Dateiname.")
-    for root in _usage_roots(folders):
-        target = (root / rel).resolve()
-        if target.is_file() and root in target.parents:
-            target.unlink()
-            return
-    raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
+    root = VIDEOS_RW_DIR.resolve()
+    target = (root / rel).resolve()
+    if root not in target.parents or not target.is_file():
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
+    if not any(upload_root == target.parent or upload_root in target.parents for upload_root in _usage_roots(folders)):
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden.")
+    filepath = str(target.relative_to(root)).replace("\\", "/")
+    with get_db() as conn:
+        owned = conn.execute(
+            "SELECT 1 FROM customer_uploads WHERE filepath = ? AND user_id = ? AND actor_id = ?",
+            (filepath, user_id, actor_id),
+        ).fetchone()
+        if not owned:
+            raise HTTPException(status_code=403, detail="Diese Datei kann nur von der Person gelöscht werden, die sie hochgeladen hat.")
+        conn.execute("DELETE FROM photos WHERE filepath = ?", (filepath,))
+        conn.execute("DELETE FROM videos WHERE filepath = ?", (filepath,))
+        conn.execute("DELETE FROM customer_uploads WHERE filepath = ?", (filepath,))
+    target.unlink()
+    return

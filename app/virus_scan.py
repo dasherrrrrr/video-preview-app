@@ -25,7 +25,10 @@ def scan_for_malware(path: Path) -> None:
                     client.sendall(struct.pack("!I", len(chunk)))
                     client.sendall(chunk)
             client.sendall(struct.pack("!I", 0))
-            response = client.recv(4096).decode("utf-8", "replace").strip()
+            # clamd terminates protocol replies with NUL (e.g. "stream: OK\\0").
+            # Strip it before evaluating the scan verdict, otherwise clean files
+            # are falsely treated as an incomplete scan.
+            response = client.recv(4096).decode("utf-8", "replace").rstrip("\x00\r\n ")
     except OSError as exc:
         raise HTTPException(
             status_code=503,
